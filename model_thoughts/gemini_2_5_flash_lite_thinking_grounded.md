@@ -1,0 +1,13 @@
+# Gemini 2.5 Flash Lite (Thinking/Grounded) Thoughts
+
+These are Gemini 2.5 Flash Lite's thoughts on blackjack
+
+## Thoughts
+>>>> What do you know about blackjack and how would you play it? Answer in at least 150 words. State the rules you assume, then describe your strategy.
+
+Blackjack is a popular card game played against the dealer, with the primary objective of achieving a hand total closer to 21 than the dealer's, without exceeding 21. I will assume standard rules where number cards are valued at their face value, face cards (Jack, Queen, King) are worth 10, and Aces can be counted as either 1 or 11, whichever is more advantageous. Players receive two cards face up, while the dealer gets one card face up (the "upcard") and one face down (the "hole card"). Players act first, deciding whether to "hit" (take another card) or "stand" (keep their current hand). Other options include "doubling down" (doubling the bet and taking exactly one more card) and "splitting" pairs into two separate hands. The dealer must hit until their hand totals 17 or more, though some tables require them to hit on a "soft 17" (an Ace counted as 11 plus other cards totaling 6). If a player's hand exceeds 21, they "bust" and lose their bet immediately. A tie is a "push," where the bet is returned. A "blackjack" (an Ace and a 10-value card on the initial two cards) typically pays out at a higher rate.
+My strategy for playing blackjack would be based on "basic strategy," which aims to optimize decisions based on the player's hand and the dealer's upcard. A core principle is to always assume the dealer's hole card is a 10. Based on this, I would adhere to the following guidelines:
+Hitting and Standing: I would always hit if my hand total is 11 or less, as it's impossible to bust. I would stand on any hand totaling 17 or more. For hands between 12 and 16, I would hit if the dealer's upcard is a 7 or higher, as the dealer is more likely to make a strong hand. Conversely, if the dealer shows a 2 through 6 (cards that make them more likely to bust), I would stand on a hand of 12-16, hoping the dealer busts. An exception is hitting on a 12 if the dealer shows a 2 or 3.
+Doubling Down: I would double down on a hand totaling 10 or 11, especially if the dealer's upcard is weak (e.g., 2 through 9).
+Splitting Pairs: I would always split Aces and 8s, as these pairs offer good opportunities to create strong hands. I would never split 10s or face cards, as a hand totaling 20 is very strong.
+Other Considerations: I would avoid taking "insurance" bets, as statistically, they are not profitable in the long run.
