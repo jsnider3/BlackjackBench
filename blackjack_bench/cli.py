@@ -28,7 +28,15 @@ def build_agent(name: str, args: argparse.Namespace | None = None) -> Any:
         temperature = getattr(args, "llm_temperature", 0.0) if args else 0.0
         prompt_mode = getattr(args, "llm_prompt", "rules_lite") if args else "rules_lite"
         llm_debug = getattr(args, "llm_debug", False) if args else False
-        return LLMAgent(provider=provider or "openai", model=model or "gpt-4o-mini", temperature=temperature, prompt_mode=prompt_mode, debug_log=llm_debug)
+        gemini_reasoning = getattr(args, "gemini_reasoning", "low") if args else "low"
+        return LLMAgent(
+            provider=provider or "openai",
+            model=model or "gpt-4o-mini",
+            temperature=temperature,
+            prompt_mode=prompt_mode,
+            debug_log=llm_debug,
+            gemini_reasoning=gemini_reasoning,
+        )
     raise ValueError(f"Unknown agent: {name}")
 
 
@@ -180,6 +188,8 @@ def main():
     p_run.add_argument("--llm-model", type=str, default="gpt-4o-mini", help="LLM model name for --agent llm")
     p_run.add_argument("--llm-temperature", type=float, default=0.0, help="LLM temperature for --agent llm")
     p_run.add_argument("--llm-prompt", type=str, choices=["minimal", "rules_lite", "verbose"], default="rules_lite", help="Prompt style for --agent llm")
+    # Gemini/OpenAI extras
+    p_run.add_argument("--gemini-reasoning", type=str, default="low", choices=["none", "low", "medium", "high"], help="Gemini reasoning effort (none disables thinking)")
     # Gemini support uses the official SDK only
     p_run.add_argument("--llm-debug", action="store_true", help="Include LLM prompt in per-decision meta (response always logged)")
     # Debug/logging
