@@ -19,6 +19,29 @@ class PolicyMetrics:
     mistake_rate: float
 
 
+def _process_decision(d: Dict, baseline: BasicStrategyAgent) -> Tuple[bool, Action, Observation]:
+    obsd = d["obs"]
+    obs = Observation(
+        player=HandView(
+            cards=obsd["player"]["cards"],
+            total=obsd["player"]["total"],
+            is_soft=obsd["player"]["is_soft"],
+            can_split=obsd["player"]["can_split"],
+            can_double=obsd["player"]["can_double"],
+        ),
+        dealer_upcard=obsd["dealer_upcard"],
+        hand_index=obsd["hand_index"],
+        num_hands=obsd["num_hands"],
+        allowed_actions=[Action[a] for a in obsd["allowed_actions"]],
+        running_count=obsd.get("running_count"),
+        true_count=obsd.get("true_count"),
+    )
+    agent_action = Action[d["action"]]
+    baseline_action = baseline.act(obs, info={})
+    mistake = agent_action != baseline_action
+    return mistake, baseline_action, obs
+
+
 def run_policy_track(agent: Any, hands: int = 10000, seed: int | None = 42, rules: Rules | None = None, *, log_fn: Optional[Callable[[Dict], None]] = None) -> Dict:
     env = BlackjackEnv(rules=rules, seed=seed)
     baseline = BasicStrategyAgent()
@@ -26,69 +49,48 @@ def run_policy_track(agent: Any, hands: int = 10000, seed: int | None = 42, rule
     mistakes = 0
     decisions = 0
     traces: List[Dict] = []
-    # Reset illegal counters if supported (GuardedAgent)
     if hasattr(agent, "reset_illegals"):
         try:
-            agent.reset_illegals()  # type: ignore[attr-defined]
+            agent.reset_illegals()
         except Exception:
             pass
 
     for hand_idx in range(hands):
         reward, summary = env.play_hand(agent, bet=1)
         total_return += reward
-        # compare decisions to baseline
         made_any = False
         for j, d in enumerate(summary["trace"].get("decisions", [])):
-            obsd = d["obs"]
-            obs = Observation(
-                player=HandView(
-                    cards=obsd["player"]["cards"],
-                    total=obsd["player"]["total"],
-                    is_soft=obsd["player"]["is_soft"],
-                    can_split=obsd["player"]["can_split"],
-                    can_double=obsd["player"]["can_double"],
-                ),
-                dealer_upcard=obsd["dealer_upcard"],
-                hand_index=obsd["hand_index"],
-                num_hands=obsd["num_hands"],
-                allowed_actions=[Action[a] for a in obsd["allowed_actions"]],
-                running_count=obsd.get("running_count"),
-                true_count=obsd.get("true_count"),
-            )
-            agent_action = Action[d["action"]]
-            baseline_action = baseline.act(obs, info={})
             decisions += 1
-            mistake = agent_action != baseline_action
+            mistake, baseline_action, obs = _process_decision(d, baseline)
             if mistake:
                 mistakes += 1
             if log_fn is not None:
                 event = {
-                        "track": "policy",
-                        "hand": hand_idx,
-                        "decision_idx": j,
-                        "obs": d["obs"],
-                        "agent_action": agent_action.name,
-                        "baseline_action": baseline_action.name,
-                        "mistake": mistake,
-                        "meta": d.get("meta", {}),
-                        "final": {
-                            "reward": reward,
-                            "dealer": summary.get("dealer"),
-                            "hands": summary.get("hands"),
-                            "bets": summary.get("bets"),
-                            "outcomes": summary.get("outcomes"),
-                            "result": summary.get("result"),
-                            "outcome_labels": summary.get("outcome_labels"),
-                            "result_detail": summary.get("result_detail"),
-                        },
-                    }
+                    "track": "policy",
+                    "hand": hand_idx,
+                    "decision_idx": j,
+                    "obs": d["obs"],
+                    "agent_action": Action[d["action"]].name,
+                    "baseline_action": baseline_action.name,
+                    "mistake": mistake,
+                    "meta": d.get("meta", {}),
+                    "final": {
+                        "reward": reward,
+                        "dealer": summary.get("dealer"),
+                        "hands": summary.get("hands"),
+                        "bets": summary.get("bets"),
+                        "outcomes": summary.get("outcomes"),
+                        "result": summary.get("result"),
+                        "outcome_labels": summary.get("outcome_labels"),
+                        "result_detail": summary.get("result_detail"),
+                    },
+                }
                 try:
                     log_fn(event)
                 except Exception:
                     pass
             made_any = True
         traces.append(summary)
-        # If no decisions occurred (e.g., naturals), still emit a minimal event
         if log_fn is not None and not made_any:
             try:
                 log_fn({
@@ -157,6 +159,8 @@ def run_policy_grid(
     reps: int = 1,
     log_fn: Optional[Callable[[Dict], None]] = None,
     resume_from: Optional[str] = None,
+    shard_index: int = 0,
+    num_shards: int = 1,
 ) -> Dict:
     ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
     dealer_up = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
@@ -171,11 +175,10 @@ def run_policy_grid(
     sum_w = 0.0
     if hasattr(agent, "reset_illegals"):
         try:
-            agent.reset_illegals()  # type: ignore[attr-defined]
+            agent.reset_illegals()
         except Exception:
             pass
 
-    # Build skip set for resume: (p1, p2, du, rep)
     skip: set[tuple[str, str, str, int]] = set()
     if resume_from:
         try:
@@ -201,19 +204,29 @@ def run_policy_grid(
         except FileNotFoundError:
             pass
 
+    try:
+        shard_index = int(shard_index)
+        num_shards = max(1, int(num_shards))
+        if shard_index < 0 or shard_index >= num_shards:
+            shard_index = 0
+    except Exception:
+        shard_index, num_shards = 0, 1
+
     cell_index = 0
-    cell_count = 0
     executed_hands = 0
     for i, r1 in enumerate(ranks):
-        for r2 in ranks[i:]:  # combinations with repetition
+        for r2 in ranks[i:]:
             for du in dealer_up:
-                cell_count += 1
+                if (cell_index % num_shards) != shard_index:
+                    cell_index += 1
+                    continue
+                
                 cell_total = 0
                 exec_reps = 0
                 for rep in range(reps):
                     if (r1, r2, du, rep) in skip:
                         continue
-                    # fresh env per replicate for independence
+                    
                     env = BlackjackEnv(rules=rules, seed=(None if seed is None else (seed + cell_index * 1009 + rep)), expose_count=False)
                     reward, summary = env.play_hand(agent, bet=1, start={"p1": r1, "p2": r2, "du": du})
                     cell_total += reward
@@ -221,26 +234,8 @@ def run_policy_grid(
                     executed_hands += 1
                     made_any = False
                     for j, d in enumerate(summary["trace"].get("decisions", [])):
-                        obsd = d["obs"]
-                        obs = Observation(
-                            player=HandView(
-                                cards=obsd["player"]["cards"],
-                                total=obsd["player"]["total"],
-                                is_soft=obsd["player"]["is_soft"],
-                                can_split=obsd["player"]["can_split"],
-                                can_double=obsd["player"]["can_double"],
-                            ),
-                            dealer_upcard=obsd["dealer_upcard"],
-                            hand_index=obsd["hand_index"],
-                            num_hands=obsd["num_hands"],
-                            allowed_actions=[Action[a] for a in obsd["allowed_actions"]],
-                            running_count=None,
-                            true_count=None,
-                        )
-                        agent_action = Action[d["action"]]
-                        baseline_action = baseline.act(obs, info={})
                         decisions += 1
-                        mistake = agent_action != baseline_action
+                        mistake, baseline_action, obs = _process_decision(d, baseline)
                         if mistake:
                             mistakes += 1
                         if log_fn is not None:
@@ -250,7 +245,7 @@ def run_policy_grid(
                                 "rep": rep,
                                 "decision_idx": j,
                                 "obs": d["obs"],
-                                "agent_action": agent_action.name,
+                                "agent_action": Action[d["action"]].name,
                                 "baseline_action": baseline_action.name,
                                 "mistake": mistake,
                                 "meta": d.get("meta", {}),
@@ -270,7 +265,7 @@ def run_policy_grid(
                             except Exception:
                                 pass
                         made_any = True
-                    # If no decisions for this (cell,rep), still emit an event so resume/progress counts it
+                    
                     if log_fn is not None and not made_any:
                         try:
                             log_fn({
@@ -294,11 +289,13 @@ def run_policy_grid(
                             pass
                     if cell_index < 10 and rep == 0:
                         traces.append(summary)
+
                 total_return += cell_total
                 if weighted and weights is not None and exec_reps > 0:
-                    w = weights[(r1, r2, du)]
-                    sum_w += w
-                    weighted_return += w * (cell_total / exec_reps)
+                    w = weights.get((r1, r2, du))
+                    if w is not None:
+                        sum_w += w
+                        weighted_return += w * (cell_total / exec_reps)
                 cell_index += 1
 
     hands = executed_hands
@@ -318,7 +315,7 @@ def run_policy_grid(
         "trace_preview": traces[:10],
     }
     if weighted:
-        out["metrics"]["ev_weighted"] = weighted_return if sum_w else 0.0
+        out["metrics"]["ev_weighted"] = (weighted_return / sum_w) if sum_w else 0.0
         out["metrics"]["sum_weights"] = sum_w
         out["metrics"]["weighted"] = True
         out["metrics"]["reps"] = reps

@@ -3,43 +3,14 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, List
 
-
-Cell = Tuple[str, str, str]  # (p1, p2, du)
-
-
-def grid_weights_infinite_deck() -> Dict[Cell, float]:
-    ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-    pr = {r: (4 / 13 if r == "10" else 1 / 13) for r in ranks}
-    dealer_up = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
-    pd = {d: pr[d] for d in dealer_up}
-    weights: Dict[Cell, float] = {}
-    for i, r1 in enumerate(ranks):
-        for r2 in ranks[i:]:
-            p_player = (pr[r1] ** 2) if r1 == r2 else (2 * pr[r1] * pr[r2])
-            for du in dealer_up:
-                weights[(r1, r2, du)] = p_player * pd[du]
-    return weights
-
-
-def load_events(path: Path) -> Iterable[dict]:
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                yield json.loads(line)
-            except Exception:
-                continue
-
-
-def norm_rank(r: str) -> str:
-    return "10" if r in {"10", "J", "Q", "K"} else r
+from common import (
+    Cell, grid_weights_infinite_deck, load_events, norm_rank, 
+    RANK_ORDER, format_table
+)
 
 
 def summarize_top_leaks(inputs: List[Path], track: str = "policy-grid", top_n: int = 15) -> List[Dict[str, object]]:
@@ -84,7 +55,7 @@ def summarize_top_leaks(inputs: List[Path], track: str = "policy-grid", top_n: i
             w = weights.get((p1, p2, du))
             if w is None:
                 # ensure order (p1<=p2) for lookup
-                r1, r2 = sorted([p1, p2], key=lambda x: ["A","2","3","4","5","6","7","8","9","10"].index(x))
+                r1, r2 = sorted([p1, p2], key=lambda x: RANK_ORDER.index(x))
                 w = weights.get((r1, r2, du), 0.0)
             wsum[key] += float(w or 0.0)
             total_w += float(w or 0.0)
@@ -130,11 +101,22 @@ def main():
 
     # print to stdout
     headers = ["category", "dealer", "baseline", "agent", "mistakes", "weighted_share"]
-    def fmt(x):
-        return f"{x:.4f}" if isinstance(x, float) else str(x)
-    print("\t".join(headers))
-    for r in rows:
-        print("\t".join(fmt(r[h]) for h in headers))
+    
+    if not rows:
+        print("(no leaks to report)")
+    else:
+        table_rows = []
+        for r in rows:
+            table_rows.append([
+                r["category"],
+                r["dealer"], 
+                r["baseline"],
+                r["agent"],
+                str(r["mistakes"]),
+                f"{r['weighted_share']:.4f}"
+            ])
+        
+        print(format_table(headers, table_rows, right_align=["mistakes", "weighted_share"]))
 
     if args.out_csv:
         Path(args.out_csv).parent.mkdir(parents=True, exist_ok=True)

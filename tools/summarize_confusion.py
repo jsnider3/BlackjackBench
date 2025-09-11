@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Dict, Iterable, List
+
+from common import format_table
 
 
 # Preferred display order; actual columns/rows are intersected with observed actions
@@ -13,12 +15,14 @@ PREF_ORDER: List[str] = ["HIT", "STAND", "DOUBLE", "SPLIT", "SURRENDER"]
 
 
 def load_events(path: str) -> Iterable[dict]:
+    """Load events from file or stdin with JSON parsing."""
     with (open(path, "r", encoding="utf-8") if path != "-" else sys.stdin) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             try:
+                import json
                 yield json.loads(line)
             except json.JSONDecodeError:
                 continue
@@ -52,9 +56,11 @@ def print_table(conf: Dict[str, Counter], total: int, mistakes: int, observed: s
     extra = sorted(a for a in observed if a not in set(PREF_ORDER))
     cols = base + extra
     rows = cols
-    # Header
-    header = ["baseline\\agent"] + cols + ["row_total", "row_mistake_rate"]
-    table = [header]
+    
+    # Build table data
+    headers = ["baseline\\agent"] + cols + ["row_total", "row_mistake_rate"]
+    table_rows = []
+    
     for r in rows:
         ctr = conf.get(r, Counter())
         row = [r]
@@ -67,23 +73,23 @@ def print_table(conf: Dict[str, Counter], total: int, mistakes: int, observed: s
         mr = (1 - (row_correct / row_total)) if row_total else 0.0
         row.append(str(row_total))
         row.append(f"{mr:.3f}")
-        table.append(row)
-    # Totals
+        table_rows.append(row)
+    
+    # Totals row
     total_row = ["total"]
     col_totals = [sum(conf.get(r, Counter()).get(c, 0) for r in rows) for c in cols]
     total_row += [str(v) for v in col_totals] + [str(total), f"{(mistakes/total if total else 0):.3f}"]
-    table.append(total_row)
+    table_rows.append(total_row)
 
-    # Print table
-    widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
-    for row in table:
-        print("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)))
+    # Print formatted table
+    print(format_table(headers, table_rows))
 
     if csv:
         import csv as _csv
         with open(csv, "w", newline="", encoding="utf-8") as fh:
             writer = _csv.writer(fh)
-            for row in table:
+            writer.writerow(headers)
+            for row in table_rows:
                 writer.writerow(row)
         print(f"wrote CSV to {csv}")
 

@@ -64,6 +64,19 @@ class BlackjackEnv:
     # API: one episode = one round/hand (including possible splits)
     # Optional forced start: dict with keys 'p1','p2','du' ranks (e.g., 'A','2','10')
     def play_hand(self, agent, bet: int = 1, start: Optional[Dict[str, str]] = None) -> Tuple[float, Dict]:
+        self._setup_hand(bet, start)
+
+        natural_result = self._handle_naturals(bet)
+        if natural_result:
+            return natural_result
+
+        trace = self._player_turn(agent, bet)
+
+        self._dealer_play()
+
+        return self._settle_hand(trace)
+
+    def _setup_hand(self, bet: int, start: Optional[Dict[str, str]] = None):
         self.hands = []
         self.active_index = 0
         self.dealer_cards = []
@@ -71,56 +84,60 @@ class BlackjackEnv:
             self.hands = [HandState(cards=[self._draw(), self._draw()], bet=bet)]
             self.dealer_cards = [self._draw(), self._draw()]
         else:
-            # normalize T->'10'
             def norm(r: str) -> str:
                 return "10" if r in ("T", "t") else r
 
             p1 = self._take_from_shoe(norm(start["p1"]))
             p2 = self._take_from_shoe(norm(start["p2"]))
             du = self._take_from_shoe(norm(start["du"]))
-            # update running count for visible cards as if drawn
             self.running_count += hilo_delta(p1)
             self.running_count += hilo_delta(p2)
             self.running_count += hilo_delta(du)
             self.hands = [HandState(cards=[p1, p2], bet=bet)]
             self.dealer_cards = [du, self._draw()]
 
-        # Natural blackjacks
+    def _handle_naturals(self, bet: int) -> Optional[Tuple[float, Dict]]:
         player_total, _ = hand_totals(self.hands[0].cards)
         dealer_total, _ = hand_totals(self.dealer_cards)
         player_blackjack = player_total == 21 and len(self.hands[0].cards) == 2
         dealer_blackjack = dealer_total == 21 and len(self.dealer_cards) == 2
+
+        if not player_blackjack and not dealer_blackjack:
+            return None
+
         trace: Dict = {"decisions": []}
+        reward: float = 0.0
+        outcomes: List[str] = []
+        outcome_labels: List[str] = []
 
-        if player_blackjack or dealer_blackjack:
-            reward: float = 0.0
-            outcomes: List[str] = []
-            outcome_labels: List[str] = []
-            if player_blackjack and dealer_blackjack:
-                reward = 0.0
-                outcomes = ["both_blackjack_push"]
-                outcome_labels = ["Both blackjack (push)"]
-            elif player_blackjack:
-                reward = self.rules.blackjack_payout * bet
-                outcomes = ["player_blackjack"]
-                outcome_labels = ["Player blackjack"]
-            else:
-                reward = -float(bet)
-                outcomes = ["dealer_blackjack"]
-                outcome_labels = ["Dealer blackjack"]
-            result_txt = "win" if reward > 0 else ("loss" if reward < 0 else "push")
-            result_detail = "Player wins" if reward > 0 else ("Player loses" if reward < 0 else "Push")
-            return reward, self._summary(
-                trace,
-                extra={
-                    "outcomes": outcomes,
-                    "outcome_labels": outcome_labels,
-                    "result": result_txt,
-                    "result_detail": result_detail,
-                },
-            )
+        if player_blackjack and dealer_blackjack:
+            reward = 0.0
+            outcomes = ["both_blackjack_push"]
+            outcome_labels = ["Both blackjack (push)"]
+        elif player_blackjack:
+            reward = self.rules.blackjack_payout * bet
+            outcomes = ["player_blackjack"]
+            outcome_labels = ["Player blackjack"]
+        else:
+            reward = -float(bet)
+            outcomes = ["dealer_blackjack"]
+            outcome_labels = ["Dealer blackjack"]
 
-        # Player actions for each hand (in order); allow dynamic inserts
+        result_txt = "win" if reward > 0 else ("loss" if reward < 0 else "push")
+        result_detail = "Player wins" if reward > 0 else ("Player loses" if reward < 0 else "Push")
+        
+        return reward, self._summary(
+            trace,
+            extra={
+                "outcomes": outcomes,
+                "outcome_labels": outcome_labels,
+                "result": result_txt,
+                "result_detail": result_detail,
+            },
+        )
+
+    def _player_turn(self, agent, bet: int) -> Dict:
+        trace: Dict = {"decisions": []}
         i = 0
         while i < len(self.hands):
             self.active_index = i
@@ -151,6 +168,7 @@ class BlackjackEnv:
                     "action": action.name,
                     "meta": meta,
                 })
+
                 if action == Action.STAND:
                     break
                 elif action == Action.HIT:
@@ -176,22 +194,17 @@ class BlackjackEnv:
                             continue
                         raise ValueError("Illegal SPLIT attempted")
                     if len(self.hands) >= self.rules.max_splits:
-                        # max hands reached, ignore split
                         self.hands[i].cards.append(self._draw())
                         continue
                     c1 = self.hands[i].cards[0]
                     c2 = self.hands[i].cards[1]
-                    # replace current with first
                     first = HandState(cards=[c1, self._draw()], bet=bet)
                     self.hands[i] = first
-                    # add second as new hand next
                     split_aces = c1.rank == "A" and c2.rank == "A"
                     new_hand = HandState(cards=[c2, self._draw()], bet=bet, is_split_aces=split_aces)
                     self.hands.insert(i + 1, new_hand)
-                    # if split aces with one-card rule, both hands stand after one draw
                     if split_aces and self.rules.split_aces_one_card:
                         break
-                    # continue current hand loop after split; allow DAS
                     continue
                 elif action == Action.SURRENDER:
                     if not self.rules.surrender_allowed:
@@ -199,20 +212,18 @@ class BlackjackEnv:
                             self.hands[i].cards.append(self._draw())
                             continue
                         raise ValueError("Illegal SURRENDER attempted")
-                    # late surrender: give up and move to next hand
                     break
                 else:
                     break
             i += 1
+        return trace
 
-        # Dealer plays
-        self._dealer_play()
-
-        # Settle
+    def _settle_hand(self, trace: Dict) -> Tuple[float, Dict]:
         reward: float = 0.0
         outcomes: List[str] = []
         outcome_labels: List[str] = []
         dealer_total, _ = hand_totals(self.dealer_cards)
+
         for h in self.hands:
             total, _ = hand_totals(h.cards)
             if total > 21:
@@ -239,6 +250,7 @@ class BlackjackEnv:
 
         result_txt = "win" if reward > 0 else ("loss" if reward < 0 else "push")
         result_detail = "Player wins" if reward > 0 else ("Player loses" if reward < 0 else "Push")
+
         return reward, self._summary(
             trace,
             extra={

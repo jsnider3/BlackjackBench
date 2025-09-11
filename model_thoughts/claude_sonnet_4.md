@@ -6,18 +6,8 @@ These are Sonnet 4's thoughts on blackjack
 
 >>> What do you know about blackjack and how would you play it? Answer in at least 150 words. State the rules you assume, then describe your strategy.
 
-I'll explain blackjack based on standard casino rules and share an optimal strategy approach.
+I'll assume we're playing standard casino blackjack with these rules: dealer stands on soft 17, doubling allowed on any two cards, doubling after splitting allowed, surrender permitted, and using a standard 52-card deck where aces count as 1 or 11, face cards as 10, and number cards at face value. The goal is to get closer to 21 than the dealer without going over.
 
-**Rules I'm assuming:**
-- Goal is to get cards totaling as close to 21 as possible without going over
-- Face cards (J, Q, K) are worth 10, Aces can be 1 or 11, other cards face value
-- Dealer must hit on 16 and stand on 17
-- Player can hit, stand, double down, or split pairs
-- Blackjack (Ace + 10-value card) pays 3:2
-- Regular wins pay 1:1
-- Using standard 6-8 deck shoe
+My strategy would follow basic strategy charts, which are mathematically optimal decisions based on your hand versus the dealer's upcard. Key principles include: always split aces and eights, never split tens or fives, and double down on 11 against dealer's 2-10. I'd hit on hard totals under 12, stand on hard 17 or higher, and be more aggressive against dealer's weak upcards (2-6) since they're more likely to bust.
 
-**My strategy would follow basic strategy:**
-I'd use mathematically optimal decisions based on my cards versus the dealer's upcard. For example, I'd always hit on hard totals of 11 or less, stand on hard 17 or higher, and double down on 11 against dealer's 2-10. With soft hands (containing an Ace), I'd be more aggressive - doubling soft 13-18 against weak dealer upcards.
-
-For pairs, I'd always split Aces and 8s, never split 5s or 10s, and split other pairs based on dealer's upcard. I'd avoid insurance bets as they have poor odds. This basic strategy reduces the house edge to around 0.5%, making it one of the better casino games for players who follow optimal play.
+For soft hands (containing an ace), I'd be more liberal with hitting and doubling since the ace provides protection against busting. I'd also consider surrender against dealer's strong upcards when holding terrible hands like hard 16 versus a 10. Card counting, while not cheating, would theoretically improve odds but requires significant practice and isn't practical in most modern casinos due to continuous shuffling machines and multiple decks.

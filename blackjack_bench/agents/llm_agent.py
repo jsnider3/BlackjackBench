@@ -9,6 +9,11 @@ from ..types import Action, Observation
 _GEMINI_THINKING: Optional[str] = None
 _GEMINI_USAGE: Optional[Dict[str, Any]] = None
 
+# Module-level scratch space for Anthropic extras captured per-request.
+# These are populated by anthropic_ask and read from LLMAgent.act when logging.
+_ANTHROPIC_THINKING: Optional[str] = None
+_ANTHROPIC_USAGE: Optional[Dict[str, Any]] = None
+
 
 def _format_allowed(actions: Iterable[Action]) -> str:
     return ", ".join(a.name for a in actions)
@@ -34,7 +39,7 @@ class LLMAgent:
         retries: int = 2,
         retry_backoff: float = 1.5,
         max_output_tokens: int = 8,
-        gemini_reasoning: str = "none",
+        reasoning: str = "none",
     ):
         if ask_fn is None and provider == "openai":
             ask_fn = self.openai_ask(model=model or "gpt-4o-mini", temperature=temperature)
@@ -43,7 +48,7 @@ class LLMAgent:
         # Google Gemini (official SDK)
         if ask_fn is None and provider in {"gemini", "google", "googleai", "google-genai"}:
             # Auto-pick output cap: small when not thinking, larger when thinking
-            if gemini_reasoning == "none":
+            if reasoning == "none":
                 desired_max = 12
             else:  # "high" or any other non-none value
                 desired_max = 8192
@@ -51,17 +56,30 @@ class LLMAgent:
                 model=model or "gemini-2.5-flash",
                 temperature=temperature,
                 max_output_tokens=desired_max,
-                gemini_reasoning=gemini_reasoning,
+                reasoning=reasoning,
             )
         if ask_fn is None and provider in {"openrouter", "openrouter.ai"}:
             ask_fn = self.openrouter_ask(model=model or "openrouter/sonoma-sky-alpha", temperature=temperature)
+        # Anthropic Claude
+        if ask_fn is None and provider in {"anthropic", "claude"}:
+            # Auto-pick output cap: small when not thinking, larger when thinking
+            if reasoning == "none":
+                desired_max = 12
+            else:
+                desired_max = 8192
+            ask_fn = self.anthropic_ask(
+                model=model or "claude-sonnet-4-20250514",
+                temperature=temperature,
+                max_tokens=desired_max,
+                reasoning=reasoning,
+            )
         if ask_fn is None:
             raise ValueError("LLMAgent requires ask_fn or provider='openai' with OpenAI installed and API key set.")
         self.ask_fn = ask_fn
         # Persist settings for downstream logging/meta
         self.provider = provider or "custom"
         self.model = model or "unknown"
-        self.gemini_reasoning = gemini_reasoning
+        self.reasoning = reasoning
         if prompt_mode not in {"minimal", "rules_lite", "verbose"}:
             raise ValueError("prompt_mode must be one of: minimal, rules_lite, verbose")
         self.prompt_mode = prompt_mode
@@ -117,13 +135,21 @@ class LLMAgent:
             if self.debug_log:
                 info["llm_prompt_mode"] = self.prompt_mode
                 info["llm_prompt"] = prompt
-            # If Gemini reasoning was enabled, attach captured thoughts/usage
-            if (self.provider in {"gemini", "google", "googleai", "google-genai"}) and (self.gemini_reasoning != "none"):
+            # If reasoning was enabled, attach captured thoughts/usage
+            if (self.provider in {"gemini", "google", "googleai", "google-genai"}) and (self.reasoning != "none"):
                 try:
                     if _GEMINI_THINKING:
                         info["llm_thinking"] = _GEMINI_THINKING
                     if _GEMINI_USAGE:
                         info["llm_usage"] = _GEMINI_USAGE
+                except Exception:
+                    pass
+            if (self.provider in {"anthropic", "claude"}) and (self.reasoning != "none"):
+                try:
+                    if _ANTHROPIC_THINKING:
+                        info["llm_thinking"] = _ANTHROPIC_THINKING
+                    if _ANTHROPIC_USAGE:
+                        info["llm_usage"] = _ANTHROPIC_USAGE
                 except Exception:
                     pass
         out = text.strip().upper()
@@ -276,12 +302,12 @@ class LLMAgent:
         model: str = "gemini-1.5-flash",
         temperature: float = 0.0,
         max_output_tokens: int = 8,
-        gemini_reasoning: str = "low",
+        reasoning: str = "low",
     ) -> Callable[[str], str]:
         """Create an ask_fn using Google's Gemini API via google-genai.
 
         Requires an API key in either GOOGLE_API_KEY or GEMINI_API_KEY.
-        When gemini_reasoning != 'none', requests include thoughts which are
+        When reasoning != 'none', requests include thoughts which are
         captured in module-level variables for logging.
         """
         import os
@@ -305,7 +331,7 @@ class LLMAgent:
                     temperature=temperature,
                     max_output_tokens=int(max_output_tokens),
                 )
-                if gemini_reasoning == "none":
+                if reasoning == "none":
                     gen_cfg.thinking_config = ThinkingConfig(thinking_budget=0)
                 else:
                     gen_cfg.thinking_config = ThinkingConfig(include_thoughts=True)
@@ -401,7 +427,7 @@ class LLMAgent:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": temperature,
-                    "max_tokens": 4,
+                    "max_tokens": 8,
                 }
                 r = requests.post(url, headers=headers, json=payload, timeout=120)
                 r.raise_for_status()
@@ -411,7 +437,8 @@ class LLMAgent:
                     msg = choices[0].get("message", {}).get("content", "")
                     return msg or ""
                 return ""
-            except Exception:
+            except Exception as e:
+                print(f"[openrouter-debug] exception in _ask_req: {e}")
                 return ""
 
         def _ask_fallback(prompt: str) -> str:
@@ -423,7 +450,7 @@ class LLMAgent:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": temperature,
-                "max_tokens": 4,
+                "max_tokens": 8,
             }).encode("utf-8")
             req = _ur.Request(url, data=payload, headers=headers, method="POST")
             try:
@@ -433,11 +460,119 @@ class LLMAgent:
                     if choices:
                         return choices[0].get("message", {}).get("content", "") or ""
                     return ""
-            except _err.URLError:
+            except _err.URLError as e:
+                print(f"[openrouter-debug] exception in _ask_fallback: {e}")
                 return ""
 
         def _ask(prompt: str) -> str:
             out = _ask_req(prompt)
             return out if out else _ask_fallback(prompt)
+
+        return _ask
+
+    @staticmethod
+    def anthropic_ask(
+        *,
+        model: str = "claude-sonnet-4-20250514",
+        temperature: float = 0.0,
+        max_tokens: int = 8,
+        reasoning: str = "none",
+    ) -> Callable[[str], str]:
+        """Create an ask_fn using Anthropic's Claude API.
+
+        Requires an API key in ANTHROPIC_API_KEY environment variable.
+        When reasoning != 'none', requests include thinking which are
+        captured in module-level variables for logging.
+        """
+        import os
+        try:
+            import anthropic
+        except ImportError as e:
+            raise RuntimeError("Install 'anthropic' to use --llm-provider anthropic/claude") from e
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("Set ANTHROPIC_API_KEY for --llm-provider anthropic/claude")
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        def _ask(prompt: str) -> str:
+            global _ANTHROPIC_THINKING, _ANTHROPIC_USAGE
+            _ANTHROPIC_THINKING = None
+            _ANTHROPIC_USAGE = None
+            try:
+                # Build messages - Claude expects system message separate from user messages
+                system_message = "You are a concise assistant."
+                
+                # Build request parameters
+                request_params = {
+                    "model": model,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "system": system_message,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+                
+                # Enable thinking if reasoning is requested
+                if reasoning != "none":
+                    # Anthropic thinking budget and max_tokens requirements
+                    thinking_budget = 5000
+                    required_max_tokens = thinking_budget + 1000  # Must be greater than budget
+                    
+                    if max_tokens <= thinking_budget:
+                        request_params["max_tokens"] = required_max_tokens
+                    
+                    # Enable thinking with proper format from official docs
+                    request_params["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": thinking_budget
+                    }
+                    # Anthropic requires temperature=1 when thinking is enabled
+                    request_params["temperature"] = 1.0
+                
+                response = client.messages.create(**request_params)
+
+                # Extract the main response text and thinking separately
+                content = ""
+                thinking_content = ""
+                
+                if hasattr(response, 'content') and response.content:
+                    for block in response.content:
+                        if hasattr(block, 'type'):
+                            if block.type == 'thinking':
+                                # This is thinking content - use .thinking attribute, not .text
+                                if hasattr(block, 'thinking'):
+                                    thinking_content += block.thinking
+                            elif block.type == 'text':
+                                # This is the main response
+                                if hasattr(block, 'text'):
+                                    content += block.text
+
+                # Store thinking content if available
+                if thinking_content.strip():
+                    _ANTHROPIC_THINKING = thinking_content.strip()
+
+                # Capture usage information if available
+                try:
+                    if hasattr(response, 'usage'):
+                        usage = response.usage
+                        _ANTHROPIC_USAGE = {
+                            "prompt_tokens": getattr(usage, 'input_tokens', None),
+                            "completion_tokens": getattr(usage, 'output_tokens', None),
+                            "total_tokens": getattr(usage, 'input_tokens', 0) + getattr(usage, 'output_tokens', 0),
+                        }
+                except Exception:
+                    pass
+
+                return content
+
+            except Exception as e:
+                try:
+                    print(f"[anthropic-debug] exception: {type(e).__name__}: {e}")
+                except Exception:
+                    pass
+                return ""
 
         return _ask

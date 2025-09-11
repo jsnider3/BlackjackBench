@@ -4,6 +4,8 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import time
+import sys
+import subprocess
 import json
 from typing import Any
 
@@ -12,6 +14,11 @@ from .agents.random_agent import RandomAgent
 from .agents.bad_agent import BadAgent
 from .agents.guarded import GuardedAgent
 from .agents.llm_agent import LLMAgent
+from .agents.claude_sonnet_agent import ClaudeSonnetAgent
+from .agents.gpt5_agent import GPT5Agent
+from .agents.gemini_flash_agent import GeminiFlashAgent
+from .agents.sonoma_sky_agent import SonomaSkyAgent
+from .agents.gemma_agent import GemmaAgent
 from .eval import run_policy_track, run_policy_grid
 
 
@@ -28,86 +35,142 @@ def build_agent(name: str, args: argparse.Namespace | None = None) -> Any:
         temperature = getattr(args, "llm_temperature", 0.0) if args else 0.0
         prompt_mode = getattr(args, "llm_prompt", "rules_lite") if args else "rules_lite"
         llm_debug = getattr(args, "llm_debug", False) if args else False
-        gemini_reasoning = getattr(args, "gemini_reasoning", "low") if args else "low"
+        reasoning = getattr(args, "reasoning", "low") if args else "low"
         return LLMAgent(
             provider=provider or "openai",
             model=model or "gpt-4o-mini",
             temperature=temperature,
             prompt_mode=prompt_mode,
             debug_log=llm_debug,
-            gemini_reasoning=gemini_reasoning,
+            reasoning=reasoning,
         )
+    # Model-thought-based agents
+    if name == "claude-sonnet":
+        return ClaudeSonnetAgent()
+    if name == "gpt5":
+        return GPT5Agent()
+    if name == "gemini-flash":
+        return GeminiFlashAgent()
+    if name == "sonoma-sky":
+        return SonomaSkyAgent()
+    if name == "gemma":
+        return GemmaAgent()
     raise ValueError(f"Unknown agent: {name}")
 
 
-def cmd_run(args: argparse.Namespace) -> None:
+def _run_parallel(args: argparse.Namespace) -> None:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    Path("logs").mkdir(parents=True, exist_ok=True)
+    suffix = args.agent
+    if args.agent == "llm":
+        model = getattr(args, "llm_model", None) or "model"
+        safe = "".join(ch if (ch.isalnum() or ch in ("-", "_")) else "-" for ch in model)
+        suffix = f"{suffix}_{safe}"
+    base_log = str(Path("logs") / f"{ts}_{args.track}_{suffix}")
+    procs = []
+    shard_logs: list[str] = []
+    par = max(1, int(getattr(args, "parallel", 1)))
+    for i in range(par):
+        shard_log = f"{base_log}_shard{i}.jsonl"
+        shard_logs.append(shard_log)
+        cmd = [
+            sys.executable,
+            "-m",
+            "blackjack_bench.cli",
+            "run",
+            "--agent", args.agent,
+            "--track", args.track,
+            "--reps", str(args.reps),
+            "--seed", str(args.seed),
+            "--heartbeat-secs", str(getattr(args, "heartbeat_secs", 60)),
+            "--log-jsonl", shard_log,
+            "--num-shards", str(par),
+            "--shard-index", str(i),
+        ]
+        if args.weighted:
+            cmd.append("--weighted")
+        if args.guard:
+            cmd.append("--guard")
+        if getattr(args, "report", None):
+            cmd.extend(["--report", f"{base_log}_shard{i}.report.json"])
+        if args.agent == "llm":
+            cmd.extend(["--llm-provider", getattr(args, "llm_provider", "openai")])
+            cmd.extend(["--llm-model", getattr(args, "llm_model", "gpt-4o-mini")])
+            cmd.extend(["--llm-temperature", str(getattr(args, "llm_temperature", 0.0))])
+            cmd.extend(["--llm-prompt", getattr(args, "llm_prompt", "rules_lite")])
+            cmd.extend(["--reasoning", getattr(args, "reasoning", "low")])
+            if getattr(args, "llm_debug", False):
+                cmd.append("--llm-debug")
+        if getattr(args, "debug", False):
+            cmd.append("--debug")
+        if getattr(args, "resume_from", None):
+            cmd.extend(["--resume-from", getattr(args, "resume_from")])
+        procs.append(subprocess.Popen(cmd))
+
+    print(f"[parent] launched {par} shard(s); writing shard logs to {base_log}_shard*.jsonl")
+    try:
+        last_done = 0
+        while True:
+            remaining = [p for p in procs if p.poll() is None]
+            done = len(procs) - len(remaining)
+            if done > last_done and done >= 1:
+                print(f"[parent] shards {done}/{par} completed")
+                last_done = done
+            if not remaining:
+                break
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("[parent] received interrupt; terminating shards...")
+        for p in procs:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        for p in procs:
+            try:
+                p.wait(timeout=5)
+            except Exception:
+                pass
+
+    try:
+        combined = f"{base_log}_combined.jsonl"
+        with open(combined, "w", encoding="utf-8") as out_f:
+            for sl in shard_logs:
+                try:
+                    with open(sl, "r", encoding="utf-8") as in_f:
+                        for line in in_f:
+                            if line.strip():
+                                out_f.write(line)
+                except FileNotFoundError:
+                    pass
+        print(f"parallel run complete; combined log: {combined}")
+        print(f"shard logs kept: {base_log}_shard*.jsonl")
+    except Exception as e:
+        print(f"parallel run complete; failed to combine logs: {e}")
+        print(f"shard logs at {base_log}_shard*.jsonl")
+
+def _run_single(args: argparse.Namespace) -> None:
     agent = build_agent(args.agent, args)
     if args.guard:
         agent = GuardedAgent(agent)
-    # Per-decision logging
-    debug = getattr(args, "debug", False)
-    log_file = getattr(args, "log_jsonl", None)
-    # If resuming and no explicit log target is provided, append to the resume file
-    if not log_file and getattr(args, "resume_from", None):
-        log_file = args.resume_from
-    if not log_file:
-        # Default log path: logs/YYYYmmdd_HHMMSS_track_agent[_model].jsonl
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        Path("logs").mkdir(parents=True, exist_ok=True)
-        suffix = args.agent
-        if args.agent == "llm":
-            model = getattr(args, "llm_model", None) or "model"
-            # Sanitize model name for filesystem
-            safe = "".join(ch if (ch.isalnum() or ch in ("-", "_")) else "-" for ch in model)
-            suffix = f"{suffix}_{safe}"
-        log_file = str(Path("logs") / f"{ts}_{args.track}_{suffix}.jsonl")
-    log_fh = open(log_file, "a", encoding="utf-8")
 
-    # Heartbeat state
+    debug = getattr(args, "debug", False)
+    log_file, log_fh = _setup_logging(args)
+
     heartbeat_secs = max(0, int(getattr(args, "heartbeat_secs", 60)))
     last_hb = time.monotonic()
     start_ts = last_hb
-    processed_pairs = set()  # for policy-grid: (p1,p2,du,rep)
-
-    # If resuming, pre-populate processed_pairs from the log
-    if getattr(args, "resume_from", None) and args.track == "policy-grid":
-        try:
-            import json as _json
-            with open(args.resume_from, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        ev = _json.loads(line)
-                    except Exception:
-                        continue
-                    if ev.get("track") != "policy-grid":
-                        continue
-                    cell = ev.get("cell") or {}
-                    rep = ev.get("rep")
-                    if not isinstance(rep, int):
-                        continue
-                    key = (cell.get("p1"), cell.get("p2"), cell.get("du"), rep)
-                    if all(isinstance(k, str) for k in key[:3]):
-                        processed_pairs.add(key)
-        except FileNotFoundError:
-            pass
+    processed_pairs = set()
     max_hand_seen = -1
 
-    # Pre-run note for grid
-    if args.track == "policy-grid" and heartbeat_secs > 0:
-        total_cells = 55 * 10 * args.reps
-        print(f"[start] policy-grid: reps={args.reps}, total_cells={total_cells}")
-        if processed_pairs:
-            done = len(processed_pairs)
-            pct = (done / total_cells) * 100 if total_cells else 0
-            print(f"[resume] already completed: {done}/{total_cells} ({pct:.1f}%) from {getattr(args, 'resume_from', '')}")
+    if getattr(args, "resume_from", None) and args.track == "policy-grid":
+        processed_pairs = _load_processed_pairs(args.resume_from)
+
+    shard_tag, total_cells_for_heartbeat = _prepare_heartbeat(args, processed_pairs)
 
     def emit(event: dict):
         nonlocal last_hb, max_hand_seen
         if debug:
-            # Compact stdout line
             obs = event.get("obs", {})
             p = obs.get("player", {})
             up_full = obs.get("dealer_upcard")
@@ -116,7 +179,6 @@ def cmd_run(args: argparse.Namespace) -> None:
             cards = [c[:-1] if isinstance(c, str) and len(c) >= 2 else c for c in cards_full]
             print(f"[hand {event.get('hand')} d{event.get('decision_idx')}] up={up} cards={cards} act={event.get('agent_action')} base={event.get('baseline_action')} mistake={event.get('mistake')} illegal={event.get('meta',{}).get('illegal_attempt') is not None}")
 
-        # Heartbeat printing
         if heartbeat_secs > 0:
             now = time.monotonic()
             track = event.get("track")
@@ -127,35 +189,45 @@ def cmd_run(args: argparse.Namespace) -> None:
                 processed_pairs.add(key)
                 if now - last_hb >= heartbeat_secs:
                     elapsed = now - start_ts
-                    total = 55 * 10 * args.reps
+                    total = total_cells_for_heartbeat
                     done = len(processed_pairs)
                     pct = (done / total) * 100 if total else 0
-                    print(f"[heartbeat] {elapsed:.0f}s policy-grid: cell={cell.get('p1')},{cell.get('p2')} vs {cell.get('du')} rep={rep+1 if isinstance(rep,int) else rep}/{args.reps} progress={done}/{total} ({pct:.1f}%)")
+                    print(f"[heartbeat]{shard_tag} {elapsed:.0f}s policy-grid: cell={cell.get('p1')},{cell.get('p2')} vs {cell.get('du')} rep={rep+1 if isinstance(rep,int) else rep}/{args.reps} progress={done}/{total} ({pct:.1f}%)")
                     last_hb = now
             elif track == "policy":
                 hand = event.get("hand")
                 if isinstance(hand, int):
-                    max_hand = max_hand_seen if isinstance(max_hand_seen, int) else -1
-                    max_hand = max(max_hand, hand)
-                    max_hand_seen = max_hand
+                    max_hand_seen = max(max_hand_seen, hand)
                 if now - last_hb >= heartbeat_secs:
                     elapsed = now - start_ts
                     total = args.hands
-                    done = (max_hand_seen + 1) if max_hand_seen >= 0 else 0
+                    done = max_hand_seen + 1
                     pct = (done / total) * 100 if total else 0
                     print(f"[heartbeat] {elapsed:.0f}s policy: hand={done}/{total} ({pct:.1f}%)")
                     last_hb = now
         if log_fh:
-            import json as _json
-            log_fh.write(_json.dumps(event) + "\n")
+            event["timestamp"] = datetime.now().isoformat()
+            log_fh.write(json.dumps(event) + "\n")
             log_fh.flush()
 
+    log_fn = emit if (debug or log_fh) else None
+
     if args.track == "policy":
-        result = run_policy_track(agent, hands=args.hands, seed=args.seed, rules=None, log_fn=emit if (debug or log_fh) else None)
+        result = run_policy_track(agent, hands=args.hands, seed=args.seed, rules=None, log_fn=log_fn)
     elif args.track == "policy-grid":
-        result = run_policy_grid(agent, seed=args.seed, weighted=args.weighted, reps=args.reps, log_fn=emit if (debug or log_fh) else None, resume_from=getattr(args, "resume_from", None))
+        result = run_policy_grid(
+            agent,
+            seed=args.seed,
+            weighted=args.weighted,
+            reps=args.reps,
+            log_fn=log_fn,
+            resume_from=getattr(args, "resume_from", None),
+            shard_index=int(getattr(args, "shard_index", 0) or 0),
+            num_shards=int(getattr(args, "num_shards", 1) or 1),
+        )
     else:
         raise ValueError(f"Unknown track: {args.track}")
+
     if args.report:
         with open(args.report, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
@@ -164,13 +236,88 @@ def cmd_run(args: argparse.Namespace) -> None:
         log_fh.close()
         print(f"per-decision log written to {log_file}")
 
+def _setup_logging(args: argparse.Namespace):
+    log_file = getattr(args, "log_jsonl", None)
+    if not log_file and getattr(args, "resume_from", None):
+        log_file = args.resume_from
+    if not log_file:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        Path("logs").mkdir(parents=True, exist_ok=True)
+        suffix = args.agent
+        if args.agent == "llm":
+            model = getattr(args, "llm_model", None) or "model"
+            safe = "".join(ch if (ch.isalnum() or ch in ("-", "_")) else "-" for ch in model)
+            suffix = f"{suffix}_{safe}"
+        log_file = str(Path("logs") / f"{ts}_{args.track}_{suffix}.jsonl")
+    log_fh = open(log_file, "a", encoding="utf-8")
+    return log_file, log_fh
+
+def _load_processed_pairs(resume_from: str) -> set:
+    processed_pairs = set()
+    try:
+        with open(resume_from, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except Exception:
+                    continue
+                if ev.get("track") != "policy-grid":
+                    continue
+                cell = ev.get("cell") or {}
+                rep = ev.get("rep")
+                if not isinstance(rep, int):
+                    continue
+                key = (cell.get("p1"), cell.get("p2"), cell.get("du"), rep)
+                if all(isinstance(k, str) for k in key[:3]):
+                    processed_pairs.add(key)
+    except FileNotFoundError:
+        pass
+    return processed_pairs
+
+def _prepare_heartbeat(args: argparse.Namespace, processed_pairs: set):
+    shard_tag = ""
+    total_cells_for_heartbeat = 55 * 10 * args.reps
+    if args.track == "policy-grid" and getattr(args, "heartbeat_secs", 60) > 0:
+        ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        dealer_up = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
+        try:
+            shard_idx = int(getattr(args, "shard_index", 0) or 0)
+            num_shards = max(1, int(getattr(args, "num_shards", 1) or 1))
+        except Exception:
+            shard_idx, num_shards = 0, 1
+        shard_cells = 0
+        ci = 0
+        for i, r1 in enumerate(ranks):
+            for r2 in ranks[i:]:
+                for _du in dealer_up:
+                    if ci % num_shards == shard_idx:
+                        shard_cells += 1
+                    ci += 1
+        total_cells_for_heartbeat = shard_cells * args.reps
+        shard_tag = f" shard={shard_idx+1}/{num_shards}" if num_shards > 1 else ""
+        print(f"[start]{shard_tag} policy-grid: reps={args.reps}, total_cells={total_cells_for_heartbeat}")
+        if processed_pairs:
+            done = len(processed_pairs)
+            pct = (done / total_cells_for_heartbeat) * 100 if total_cells_for_heartbeat else 0
+            print(f"[resume]{shard_tag} already completed: {done}/{total_cells_for_heartbeat} ({pct:.1f}%)")
+    return shard_tag, total_cells_for_heartbeat
+
+def cmd_run(args: argparse.Namespace) -> None:
+    if max(1, int(getattr(args, "parallel", 1))) > 1:
+        _run_parallel(args)
+    else:
+        _run_single(args)
+
 
 def main():
     parser = argparse.ArgumentParser(prog="blackjack_bench", description="BlackJackBench CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_run = sub.add_parser("run", help="Run a benchmark track")
-    p_run.add_argument("--agent", choices=["basic", "random", "bad", "worst", "llm"], default="basic")
+    p_run.add_argument("--agent", choices=["basic", "random", "bad", "worst", "llm", "claude-sonnet", "gpt5", "gemini-flash", "sonoma-sky", "gemma"], default="basic")
     p_run.add_argument("--track", choices=["policy", "policy-grid"], default="policy")
     p_run.add_argument("--hands", type=int, default=10000)
     p_run.add_argument("--seed", type=int, default=42)
@@ -183,13 +330,13 @@ def main():
         "--llm-provider",
         type=str,
         default="openai",
-        help="LLM provider (openai | gemini | ollama | openrouter)",
+        help="LLM provider (openai | gemini | ollama | openrouter | anthropic)",
     )
     p_run.add_argument("--llm-model", type=str, default="gpt-4o-mini", help="LLM model name for --agent llm")
     p_run.add_argument("--llm-temperature", type=float, default=0.0, help="LLM temperature for --agent llm")
     p_run.add_argument("--llm-prompt", type=str, choices=["minimal", "rules_lite", "verbose"], default="rules_lite", help="Prompt style for --agent llm")
-    # Gemini/OpenAI extras
-    p_run.add_argument("--gemini-reasoning", type=str, default="low", choices=["none", "low", "medium", "high"], help="Gemini reasoning effort (none disables thinking)")
+    # LLM reasoning
+    p_run.add_argument("--reasoning", type=str, default="low", choices=["none", "low", "medium", "high"], help="LLM reasoning effort (none disables thinking)")
     # Gemini support uses the official SDK only
     p_run.add_argument("--llm-debug", action="store_true", help="Include LLM prompt in per-decision meta (response always logged)")
     # Debug/logging
@@ -197,6 +344,10 @@ def main():
     p_run.add_argument("--log-jsonl", type=str, default=None, help="Write per-decision JSONL events to this file")
     p_run.add_argument("--heartbeat-secs", type=int, default=60, help="Print a heartbeat line every N seconds (0 to disable)")
     p_run.add_argument("--resume-from", type=str, default=None, help="For policy-grid, resume by skipping (cell,rep) pairs already present in this JSONL log")
+    # Parallel/sharding
+    p_run.add_argument("--parallel", type=int, default=1, help="Run policy-grid in N parallel shards (spawns subprocesses)")
+    p_run.add_argument("--num-shards", type=int, default=1, help="Advanced: total shards for this run (use with --shard-index)")
+    p_run.add_argument("--shard-index", type=int, default=None, help="Advanced: process only shard INDEX (0-based), used internally when --parallel > 1")
     p_run.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
