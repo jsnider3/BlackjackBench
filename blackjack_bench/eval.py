@@ -7,6 +7,7 @@ from .env import BlackjackEnv
 from .rules import Rules
 from .types import Observation, Action, HandView
 from .agents.basic import BasicStrategyAgent
+from .weights import grid_weights_infinite_deck
 
 
 @dataclass
@@ -133,21 +134,6 @@ def run_policy_track(agent: Any, hands: int = 10000, seed: int | None = 42, rule
     return out
 
 
-def _grid_weights_infinite_deck() -> Dict[Tuple[str, str, str], float]:
-    # Ranks with 10-grouping; probabilities under infinite-deck approximation
-    ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-    pr = {r: (4/13 if r == "10" else 1/13) for r in ranks}
-    dealer_up = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
-    pd = {d: pr[d] for d in dealer_up}
-
-    weights: Dict[Tuple[str, str, str], float] = {}
-    for i, r1 in enumerate(ranks):
-        for r2 in ranks[i:]:
-            p_player = (pr[r1] ** 2) if r1 == r2 else (2 * pr[r1] * pr[r2])
-            for du in dealer_up:
-                weights[(r1, r2, du)] = p_player * pd[du]
-    # Sum is 1.0 under independence
-    return weights
 
 
 def run_policy_grid(
@@ -170,7 +156,7 @@ def run_policy_grid(
     mistakes = 0
     decisions = 0
     traces: List[Dict] = []
-    weights = _grid_weights_infinite_deck() if weighted else None
+    weights = grid_weights_infinite_deck() if weighted else None
     weighted_return = 0.0
     sum_w = 0.0
     if hasattr(agent, "reset_illegals"):

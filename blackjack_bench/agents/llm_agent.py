@@ -4,20 +4,38 @@ from typing import Any, Callable, Iterable, List, Optional, Dict
 
 from ..types import Action, Observation
 
-# Module-level scratch space for Gemini extras captured per-request.
-# These are populated by gemini_api_ask and read from LLMAgent.act when logging.
-_GEMINI_THINKING: Optional[str] = None
-_GEMINI_USAGE: Optional[Dict[str, Any]] = None
+# Import constants from main constants module
+from ..constants import OPENAI_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_RETRIES, DEFAULT_RETRY_BACKOFF
 
-# Module-level scratch space for Anthropic extras captured per-request.
-# These are populated by anthropic_ask and read from LLMAgent.act when logging.
-_ANTHROPIC_THINKING: Optional[str] = None
-_ANTHROPIC_USAGE: Optional[Dict[str, Any]] = None
+# Module-level metadata storage for provider responses
+# Note: This is a simple approach suitable for single-threaded CLI usage
+# For multi-threaded applications, consider using thread-local storage
+_PROVIDER_METADATA = {
+    'gemini': {'thinking': None, 'usage': None},
+    'anthropic': {'thinking': None, 'usage': None}, 
+    'openai': {'thinking': None, 'usage': None}
+}
 
-# Module-level scratch space for OpenAI extras captured per-request.
-_OPENAI_THINKING: Optional[str] = None
+def _clear_provider_metadata(provider: str) -> None:
+    """Clear metadata for a specific provider."""
+    if provider in _PROVIDER_METADATA:
+        _PROVIDER_METADATA[provider] = {'thinking': None, 'usage': None}
 
-_OPENAI_MAX_TOKENS = 8000
+def _set_provider_metadata(provider: str, thinking: Optional[str] = None, usage: Optional[Dict[str, Any]] = None) -> None:
+    """Set metadata for a specific provider."""
+    if provider not in _PROVIDER_METADATA:
+        _PROVIDER_METADATA[provider] = {}
+    if thinking is not None:
+        _PROVIDER_METADATA[provider]['thinking'] = thinking
+    if usage is not None:
+        _PROVIDER_METADATA[provider]['usage'] = usage
+
+def _get_provider_metadata(provider: str) -> Dict[str, Any]:
+    """Get metadata for a specific provider."""
+    return _PROVIDER_METADATA.get(provider, {'thinking': None, 'usage': None})
+
+# Keep the old name for backward compatibility in this module
+_OPENAI_MAX_TOKENS = OPENAI_MAX_TOKENS
 
 
 def _format_allowed(actions: Iterable[Action]) -> str:
@@ -257,7 +275,7 @@ class LLMAgent:
                 if is_reasoning_model and reasoning != "none":
                     # Responses API - reasoning is already set in request_params
                     # Note: Many GPT-5 models don't support temperature in Responses API
-                    print(f"[openai-debug] Using Responses API for reasoning model")
+                    pass
                 else:
                     # Chat Completions API - add reasoning_effort for GPT-5 models
                     if reasoning == "none" and "gpt-5" in model.lower():
@@ -302,12 +320,21 @@ class LLMAgent:
                                 item_type = getattr(item, 'type', 'unknown')
                                 
                                 if item_type == 'reasoning':
-                                    # Capture reasoning summary
+                                    # Capture all reasoning summaries
                                     if hasattr(item, 'summary') and item.summary:
-                                        summary_text = item.summary[0].text if item.summary else ""
-                                        if summary_text:
-                                            _OPENAI_THINKING = summary_text
-                                            print(f"[openai-debug] Captured reasoning summary ({len(summary_text)} chars)")
+                                        # Collect all summary texts, not just the first one
+                                        summary_texts = []
+                                        for summary_item in item.summary:
+                                            if hasattr(summary_item, 'text') and summary_item.text:
+                                                summary_texts.append(summary_item.text)
+                                        
+                                        if summary_texts:
+                                            # If we already have thinking, append; otherwise set
+                                            new_thinking = "\n---\n".join(summary_texts)
+                                            if _OPENAI_THINKING:
+                                                _OPENAI_THINKING += "\n===\n" + new_thinking
+                                            else:
+                                                _OPENAI_THINKING = new_thinking
                                 elif item_type == 'message':
                                     # Get the main response message
                                     if hasattr(item, 'content') and item.content:
