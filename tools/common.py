@@ -23,6 +23,12 @@ Key = Tuple[str, str, str, int]  # (p1, p2, du, rep)
 # Constants
 RANK_ORDER = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 FACE_CARDS = {"10", "J", "Q", "K"}
+DEALER_UPCARDS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "A"]
+ACTIONS = ["HIT", "STAND", "DOUBLE", "SPLIT", "SURRENDER"]
+
+# Default configuration values commonly used across tools
+DEFAULT_TOP_N = 15
+DEFAULT_PRECISION = 6
 
 
 def norm_rank(rank: str) -> str:
@@ -102,6 +108,41 @@ def load_events(path: Path) -> Iterable[dict]:
                 yield json.loads(line)
             except Exception:
                 continue
+
+
+def categorize_hand(event: Dict[str, Any]) -> str:
+    """
+    Categorize a decision event into strategy category.
+    
+    Args:
+        event: JSONL event dictionary
+        
+    Returns:
+        Category string: "pair X/X", "soft N", "hard N", or "unknown"
+        
+    Note:
+        This is a standardized version used across multiple tools.
+        For first decisions, it checks for pairs; otherwise categorizes by total and softness.
+    """
+    obs = event.get("obs") or {}
+    player = obs.get("player") or {}
+    total = player.get("total")
+    is_soft = bool(player.get("is_soft"))
+    cell = event.get("cell") or {}
+    
+    # Normalize card ranks
+    p1 = norm_rank(str(cell.get("p1"))) if cell.get("p1") else None
+    p2 = norm_rank(str(cell.get("p2"))) if cell.get("p2") else None
+    
+    # Check for pairs on first decision
+    if event.get("decision_idx") == 0 and p1 and p2 and p1 == p2:
+        return f"pair {p1}/{p2}"
+    
+    # Categorize by hand total
+    if isinstance(total, int):
+        return f"soft {total}" if is_soft else f"hard {total}"
+    
+    return "unknown"
 
 
 def classify_decision(event: dict) -> Tuple[str, Optional[Cell]]:
@@ -213,8 +254,31 @@ def format_table(
     return "\n".join(lines)
 
 
-def safe_float_format(value: float, precision: int = 6) -> str:
-    """Format float with specified precision, handling edge cases."""
+def safe_float_format(value: float, precision: int = DEFAULT_PRECISION) -> str:
+    """
+    Format float with specified precision, handling edge cases.
+    
+    Args:
+        value: Float value to format
+        precision: Number of decimal places (default from DEFAULT_PRECISION)
+        
+    Returns:
+        Formatted string representation of the float
+    """
     if value == 0.0:
-        return "0.000000"
+        return "0." + "0" * precision
     return f"{value:.{precision}f}"
+
+
+def safe_percentage_format(value: float, precision: int = 2) -> str:
+    """
+    Format float as percentage with specified precision.
+    
+    Args:
+        value: Float value (0.0-1.0 range expected)
+        precision: Number of decimal places for percentage
+        
+    Returns:
+        Formatted percentage string (e.g., "45.67%")
+    """
+    return f"{value * 100:.{precision}f}%"

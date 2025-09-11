@@ -19,6 +19,7 @@ from .agents.gpt5_agent import GPT5Agent
 from .agents.gemini_flash_agent import GeminiFlashAgent
 from .agents.sonoma_sky_agent import SonomaSkyAgent
 from .agents.gemma_agent import GemmaAgent
+from .agents.qwen_cli_agent import QwenCLIAgent
 from .eval import run_policy_track, run_policy_grid
 
 
@@ -55,6 +56,9 @@ def build_agent(name: str, args: argparse.Namespace | None = None) -> Any:
         return SonomaSkyAgent()
     if name == "gemma":
         return GemmaAgent()
+    if name == "qwen-cli":
+        llm_debug = getattr(args, "llm_debug", False) if args else False
+        return QwenCLIAgent(debug_log=llm_debug)
     raise ValueError(f"Unknown agent: {name}")
 
 
@@ -162,6 +166,11 @@ def _run_single(args: argparse.Namespace) -> None:
     start_ts = last_hb
     processed_pairs = set()
     max_hand_seen = -1
+    
+    # Error tracking
+    error_count = 0
+    consecutive_errors = 0
+    last_error = None
 
     if getattr(args, "resume_from", None) and args.track == "policy-grid":
         processed_pairs = _load_processed_pairs(args.resume_from)
@@ -169,7 +178,49 @@ def _run_single(args: argparse.Namespace) -> None:
     shard_tag, total_cells_for_heartbeat = _prepare_heartbeat(args, processed_pairs)
 
     def emit(event: dict):
-        nonlocal last_hb, max_hand_seen
+        nonlocal last_hb, max_hand_seen, error_count, consecutive_errors, last_error
+        
+        # Check for LLM errors and empty responses
+        meta = event.get("meta", {})
+        llm_status = meta.get("llm_status")
+        llm_error = meta.get("llm_error")
+        llm_model = meta.get("llm_model", "unknown")
+        
+        if llm_status == "error" and llm_error:
+            error_count += 1
+            consecutive_errors += 1
+            last_error = llm_error
+            
+            # Print error immediately for visibility
+            print(f"❌ LLM ERROR (#{error_count}): {llm_error}")
+            
+            # If we get too many consecutive errors, abort
+            if consecutive_errors >= 10:
+                print(f"🛑 ABORTING: {consecutive_errors} consecutive LLM errors. Last error: {last_error}")
+                print(f"Check your API key, model name, or network connection.")
+                if log_fh:
+                    log_fh.close()
+                sys.exit(1)
+        elif llm_status == "empty":
+            error_count += 1
+            consecutive_errors += 1
+            last_error = f"Model {llm_model} returned empty response after {meta.get('llm_attempts', '?')} attempts"
+            
+            # Print empty response error for visibility
+            print(f"❌ LLM EMPTY RESPONSE (#{error_count}): {last_error}")
+            
+            # If we get too many consecutive empty responses, abort
+            if consecutive_errors >= 10:
+                print(f"🛑 ABORTING: {consecutive_errors} consecutive empty responses from {llm_model}")
+                print(f"The model may not support the current prompt format or parameters.")
+                print(f"Try using --llm-debug to see the exact prompt being sent.")
+                if log_fh:
+                    log_fh.close()
+                sys.exit(1)
+        else:
+            # Reset consecutive counter on success
+            consecutive_errors = 0
+        
         if debug:
             obs = event.get("obs", {})
             p = obs.get("player", {})
@@ -232,6 +283,13 @@ def _run_single(args: argparse.Namespace) -> None:
         with open(args.report, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
     print(json.dumps(result["metrics"], indent=2))
+    
+    # Print error summary
+    if error_count > 0:
+        print(f"\n⚠️  WARNING: {error_count} LLM errors occurred during this run.")
+        print(f"   Last error: {last_error}")
+        print(f"   Check the log file for details: {log_file}")
+    
     if log_fh:
         log_fh.close()
         print(f"per-decision log written to {log_file}")
@@ -317,7 +375,7 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_run = sub.add_parser("run", help="Run a benchmark track")
-    p_run.add_argument("--agent", choices=["basic", "random", "bad", "worst", "llm", "claude-sonnet", "gpt5", "gemini-flash", "sonoma-sky", "gemma"], default="basic")
+    p_run.add_argument("--agent", choices=["basic", "random", "bad", "worst", "llm", "claude-sonnet", "gpt5", "gemini-flash", "sonoma-sky", "gemma", "qwen-cli"], default="basic")
     p_run.add_argument("--track", choices=["policy", "policy-grid"], default="policy")
     p_run.add_argument("--hands", type=int, default=10000)
     p_run.add_argument("--seed", type=int, default=42)

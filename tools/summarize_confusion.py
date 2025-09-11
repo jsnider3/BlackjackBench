@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -15,38 +16,64 @@ PREF_ORDER: List[str] = ["HIT", "STAND", "DOUBLE", "SPLIT", "SURRENDER"]
 
 
 def load_events(path: str) -> Iterable[dict]:
-    """Load events from file or stdin with JSON parsing."""
+    """
+    Load JSONL events from file path or stdin.
+    
+    Args:
+        path: File path or "-" for stdin
+        
+    Yields:
+        Parsed JSON events, skipping malformed lines
+        
+    Note:
+        This is a specialized version that handles stdin, 
+        unlike the common.load_events which only handles Path objects.
+    """
     with (open(path, "r", encoding="utf-8") if path != "-" else sys.stdin) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             try:
-                import json
                 yield json.loads(line)
             except json.JSONDecodeError:
                 continue
 
 
-def confusion(path: str, track: str | None = None):
-    """Return mapping baseline_action -> Counter(agent_action -> count) for one file."""
+def confusion(path: str, track: str | None = None) -> tuple[Dict[str, Counter], int, int, set[str]]:
+    """
+    Generate confusion matrix data from JSONL events.
+    
+    Args:
+        path: File path or "-" for stdin
+        track: Filter to specific track (e.g., "policy-grid")
+    
+    Returns:
+        Tuple of (confusion_matrix, total_decisions, total_mistakes, observed_actions)
+        where confusion_matrix maps baseline_action -> Counter(agent_action -> count)
+    """
     conf: Dict[str, Counter] = defaultdict(Counter)
     total = 0
     mistakes = 0
     observed: set[str] = set()
+    
     for ev in load_events(path):
         if track and ev.get("track") != track:
             continue
+            
         a = ev.get("agent_action")
         b = ev.get("baseline_action")
         if not a or not b:
             continue
+            
         conf[b][a] += 1
         observed.add(a)
         observed.add(b)
         total += 1
+        
         if a != b:
             mistakes += 1
+            
     return conf, total, mistakes, observed
 
 

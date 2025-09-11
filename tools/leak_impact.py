@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 
 from common import (
     Cell, Key, grid_weights_infinite_deck, load_events, norm_rank,
-    RANK_ORDER, format_table
+    RANK_ORDER, format_table, categorize_hand
 )
 
 
@@ -38,20 +38,15 @@ def per_hand_rewards(path: Path, track: str = "policy-grid") -> Dict[Key, float]
 
 
 def categorize(ev: dict) -> Tuple[str, str, str, str]:
+    """
+    Categorize event and extract actions for leak analysis.
+    
+    Returns:
+        Tuple of (category, dealer_upcard, baseline_action, agent_action)
+    """
     cell = ev.get("cell") or {}
-    p1 = norm_rank(str(cell.get("p1")))
-    p2 = norm_rank(str(cell.get("p2")))
     du = norm_rank(str(cell.get("du")))
-    obs = ev.get("obs") or {}
-    player = obs.get("player") or {}
-    total = int(player.get("total", 0))
-    is_soft = bool(player.get("is_soft"))
-    if p1 == p2:
-        cat = f"pair {p1}/{p2}"
-    elif is_soft:
-        cat = f"soft {total}"
-    else:
-        cat = f"hard {total}"
+    cat = categorize_hand(ev)
     b = str(ev.get("baseline_action"))
     a = str(ev.get("agent_action"))
     return cat, du, b, a

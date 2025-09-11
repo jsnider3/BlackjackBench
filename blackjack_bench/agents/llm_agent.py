@@ -14,6 +14,11 @@ _GEMINI_USAGE: Optional[Dict[str, Any]] = None
 _ANTHROPIC_THINKING: Optional[str] = None
 _ANTHROPIC_USAGE: Optional[Dict[str, Any]] = None
 
+# Module-level scratch space for OpenAI extras captured per-request.
+_OPENAI_THINKING: Optional[str] = None
+
+_OPENAI_MAX_TOKENS = 8000
+
 
 def _format_allowed(actions: Iterable[Action]) -> str:
     return ", ".join(a.name for a in actions)
@@ -42,7 +47,7 @@ class LLMAgent:
         reasoning: str = "none",
     ):
         if ask_fn is None and provider == "openai":
-            ask_fn = self.openai_ask(model=model or "gpt-4o-mini", temperature=temperature)
+            ask_fn = self.openai_ask(model=model or "gpt-4o-mini", temperature=temperature, reasoning=reasoning)
         if ask_fn is None and provider == "ollama":
             ask_fn = self.ollama_ask(model=model or "llama3.1", temperature=temperature)
         # Google Gemini (official SDK)
@@ -152,6 +157,12 @@ class LLMAgent:
                         info["llm_usage"] = _ANTHROPIC_USAGE
                 except Exception:
                     pass
+            if self.provider == "openai" and self.reasoning != "none":
+                try:
+                    if _OPENAI_THINKING:
+                        info["llm_thinking"] = _OPENAI_THINKING
+                except Exception:
+                    pass
         out = text.strip().upper()
         # Allow variants like "HIT", "Action: HIT", or JSON-like outputs
         for a in observation.allowed_actions:
@@ -201,11 +212,10 @@ class LLMAgent:
         )
 
     @staticmethod
-    def openai_ask(*, model: str, temperature: float = 0.0) -> Callable[[str], str]:
+    def openai_ask(*, model: str, temperature: float = 0.0, reasoning: str = "none") -> Callable[[str], str]:
         """Create an ask_fn that queries OpenAI's Chat Completions API.
 
-        Supports both the new `openai` client (OpenAI()) and the legacy
-        `openai.ChatCompletion.create` if present. Requires OPENAI_API_KEY.
+        Requires OPENAI_API_KEY to be set.
         """
         try:
             # New style client
@@ -214,36 +224,155 @@ class LLMAgent:
             client = OpenAI()
 
             def _ask(prompt: str) -> str:
-                resp = client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": "You are a concise assistant."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=temperature,
-                    max_tokens=4,
-                )
-                return resp.choices[0].message.content or ""
+                global _OPENAI_THINKING
+                _OPENAI_THINKING = None
+                
+                # Use Responses API for reasoning models to get thinking content
+                # Check if this looks like a reasoning model (GPT-5, o1, o3, o4)
+                is_reasoning_model = any(x in model.lower() for x in ['gpt-5', 'o1', 'o3', 'o4'])
+                
+                if is_reasoning_model and reasoning != "none":
+                    # Use Responses API for reasoning models when reasoning is enabled
+                    request_params = {
+                        "model": model,
+                        "input": prompt,
+                        "reasoning": {"summary": "auto"}  # Request reasoning summaries
+                    }
+                else:
+                    # Use Chat Completions API for non-reasoning models or when reasoning is disabled
+                    request_params = {
+                        "model": model,
+                        "messages": [
+                            {"role": "user", "content": prompt},
+                        ],
+                    }
+                
+                # Some models (like GPT-5-Nano) don't support temperature=0.0
+                if "gpt-5-nano" in model and temperature == 0.0:
+                    pass  # Don't add temperature, use model default (1.0)
+                elif temperature != 1.0:  # Only add temperature if it's not the default
+                    request_params["temperature"] = temperature
 
-            return _ask
-        except ImportError:
-            pass
-
-        # Legacy fallback
-        try:
-            import openai  # type: ignore
-
-            def _ask(prompt: str) -> str:
-                resp = openai.ChatCompletion.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": "You are a concise assistant."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=temperature,
-                    max_tokens=4,
-                )
-                return resp["choices"][0]["message"]["content"]
+                # Add API-specific parameters
+                if is_reasoning_model and reasoning != "none":
+                    # Responses API - reasoning is already set in request_params
+                    # Note: Many GPT-5 models don't support temperature in Responses API
+                    print(f"[openai-debug] Using Responses API for reasoning model")
+                else:
+                    # Chat Completions API - add reasoning_effort for GPT-5 models
+                    if reasoning == "none" and "gpt-5" in model.lower():
+                        request_params["reasoning_effort"] = "minimal"
+                    elif reasoning in ["low", "medium", "high"] and "gpt-5" in model.lower():
+                        effort_map = {"low": "minimal", "medium": "medium", "high": "high"}
+                        request_params["reasoning_effort"] = effort_map[reasoning]
+                        print(f"[openai-debug] Reasoning enabled: effort={effort_map[reasoning]}")
+                    
+                    # Add temperature for Chat Completions
+                    if "gpt-5-nano" in model and temperature == 0.0:
+                        pass  # Don't add temperature, use model default (1.0)
+                    elif temperature != 1.0:  # Only add temperature if it's not the default
+                        request_params["temperature"] = temperature
+                
+                # Debug: Log the request being made (minimal)
+                api_type = "Responses" if (is_reasoning_model and reasoning != "none") else "Chat Completions"
+                reasoning_info = f" reasoning={reasoning}" if reasoning != "none" else ""
+                #print(f"[openai-debug] {api_type} API call to {model}{reasoning_info}")
+                
+                # Make the API call
+                try:
+                    if is_reasoning_model and reasoning != "none":
+                        # Use Responses API
+                        resp = client.responses.create(**request_params)
+                    else:
+                        # Use Chat Completions API
+                        resp = client.chat.completions.create(
+                            **request_params,
+                            max_completion_tokens=_OPENAI_MAX_TOKENS,
+                        )
+                    
+                    content = ""
+                    
+                    # Determine which API was actually used based on response structure
+                    actual_api_type = "Responses" if hasattr(resp, 'output') else "Chat Completions"
+                    
+                    if actual_api_type == "Responses":
+                        # Handle Responses API structure
+                        if hasattr(resp, 'output') and resp.output:
+                            for item in resp.output:
+                                item_type = getattr(item, 'type', 'unknown')
+                                
+                                if item_type == 'reasoning':
+                                    # Capture reasoning summary
+                                    if hasattr(item, 'summary') and item.summary:
+                                        summary_text = item.summary[0].text if item.summary else ""
+                                        if summary_text:
+                                            _OPENAI_THINKING = summary_text
+                                            print(f"[openai-debug] Captured reasoning summary ({len(summary_text)} chars)")
+                                elif item_type == 'message':
+                                    # Get the main response message
+                                    if hasattr(item, 'content') and item.content:
+                                        content = item.content[0].text if item.content else ""
+                    else:
+                        # Handle Chat Completions API structure
+                        if hasattr(resp, 'choices') and len(resp.choices) > 0:
+                            choice = resp.choices[0]
+                            if hasattr(choice, 'message'):
+                                msg = choice.message
+                                content = getattr(msg, 'content', '') or ""
+                    
+                    # Usage info (keep this as it's useful)
+                    if hasattr(resp, 'usage'):
+                        usage = resp.usage
+                    
+                    if not content.strip():
+                        print(f"[openai-debug] ❌ Empty response")
+                        return ""
+                    else:
+                        #print(f"[openai-debug] ✅ '{content.strip()}'")
+                        return content
+                except Exception as e:
+                    print(f"[openai-debug] ❌ Exception: {type(e).__name__}: {e}")
+                    error_str = str(e).lower()
+                    
+                    # Handle unsupported parameters (like temperature on GPT-5-nano)
+                    if "unsupported parameter" in error_str:
+                        if is_reasoning_model and reasoning != "none":
+                            # Remove unsupported parameters and retry with Responses API
+                            print(f"[openai-debug] Removing unsupported parameters and retrying Responses API...")
+                            clean_params = {
+                                "model": model,
+                                "input": prompt,
+                                "reasoning": {"summary": "auto"}
+                            }
+                            try:
+                                resp = client.responses.create(**clean_params)
+                                print(f"[openai-debug] ✅ Clean Responses API succeeded")
+                                # Continue to response processing below
+                            except Exception as e2:
+                                print(f"[openai-debug] ❌ Clean Responses API also failed: {type(e2).__name__}: {e2}")
+                                return ""
+                        else:
+                            # For Chat Completions, try removing reasoning_effort if present
+                            if "reasoning_effort" in request_params:
+                                print(f"[openai-debug] Removing reasoning_effort and retrying Chat Completions...")
+                                clean_params = request_params.copy()
+                                del clean_params["reasoning_effort"]
+                                try:
+                                    resp = client.chat.completions.create(
+                                        **clean_params,
+                                        max_completion_tokens=_OPENAI_MAX_TOKENS,
+                                    )
+                                    print(f"[openai-debug] ✅ Clean Chat Completions succeeded")
+                                    # Continue to response processing below
+                                except Exception as e2:
+                                    print(f"[openai-debug] ❌ Clean Chat Completions also failed: {type(e2).__name__}: {e2}")
+                                    return ""
+                            else:
+                                print(f"[openai-debug] ❌ Unsupported parameter error, cannot recover")
+                                return ""
+                    else:
+                        print(f"[openai-debug] ❌ Unhandled error: {e}")
+                        return ""
 
             return _ask
         except ImportError as e:

@@ -9,11 +9,11 @@ from typing import Dict, List
 
 from common import (
     Cell, grid_weights_infinite_deck, load_events, norm_rank, 
-    RANK_ORDER, format_table
+    RANK_ORDER, format_table, categorize_hand, DEFAULT_TOP_N
 )
 
 
-def summarize_top_leaks(inputs: List[Path], track: str = "policy-grid", top_n: int = 15) -> List[Dict[str, object]]:
+def summarize_top_leaks(inputs: List[Path], track: str = "policy-grid", top_n: int = DEFAULT_TOP_N) -> List[Dict[str, object]]:
     weights = grid_weights_infinite_deck()
     # key: (category, du, baseline, agent)
     counts: Dict[Tuple[str, str, str, str], int] = defaultdict(int)
@@ -37,17 +37,8 @@ def summarize_top_leaks(inputs: List[Path], track: str = "policy-grid", top_n: i
             du = norm_rank(str(cell.get("du"))) if cell.get("du") else None
             if not (p1 and p2 and du):
                 continue
-            # categorize: pair vs soft vs hard
-            obs = ev.get("obs") or {}
-            player = obs.get("player") or {}
-            total = player.get("total")
-            is_soft = bool(player.get("is_soft"))
-            if p1 == p2:
-                cat = f"pair {p1}/{p2}"
-            elif is_soft:
-                cat = f"soft {total}"
-            else:
-                cat = f"hard {total}"
+            # Use standardized categorization
+            cat = categorize_hand(ev)
 
             key = (cat, du, b, a)
             counts[key] += 1
@@ -82,7 +73,7 @@ def main():
     ap.add_argument("inputs", nargs="+", help="One or more JSONL log files or globs")
     ap.add_argument("--out-csv", default=None, help="Optional CSV output path")
     ap.add_argument("--out-md", default=None, help="Optional Markdown table output path")
-    ap.add_argument("--top", type=int, default=15, help="Number of rows to output")
+    ap.add_argument("--top", type=int, default=DEFAULT_TOP_N, help="Number of rows to output")
     args = ap.parse_args()
 
     # expand globs

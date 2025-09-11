@@ -2,89 +2,65 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
+
+from common import (
+    discover_files, load_events, norm_rank, RANK_ORDER, categorize_hand
+)
 
 
-def discover_files(inputs: List[str]) -> List[Path]:
-    files: List[Path] = []
-    for inp in inputs:
-        p = Path(inp)
-        if p.is_dir():
-            files.extend(sorted(p.glob("*.jsonl")))
-        elif any(ch in inp for ch in "*?["):
-            files.extend(sorted(Path().glob(inp)))
-        else:
-            files.append(p)
-    out: List[Path] = []
-    seen = set()
-    for f in files:
-        if f.exists() and f.suffix == ".jsonl" and f not in seen:
-            out.append(f)
-            seen.add(f)
-    return out
-
-
-def load_events(path: Path) -> Iterable[dict]:
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                yield json.loads(line)
-            except Exception:
-                continue
-
-
-RANK_ORDER = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-
-
-def norm_rank(r: str) -> str:
-    return "10" if r in {"10", "J", "Q", "K"} else r
-
-
-def categorize(ev: dict) -> str:
-    obs = ev.get("obs") or {}
-    player = obs.get("player") or {}
-    total = player.get("total")
-    is_soft = bool(player.get("is_soft"))
-    cell = ev.get("cell") or {}
-    p1 = norm_rank(str(cell.get("p1"))) if cell.get("p1") else None
-    p2 = norm_rank(str(cell.get("p2"))) if cell.get("p2") else None
-    if ev.get("decision_idx") == 0 and p1 and p2 and p1 == p2:
-        return f"pair {p1}/{p2}"
-    return (f"soft {total}" if is_soft else f"hard {total}") if isinstance(total, int) else "unknown"
+# Use the standardized categorization function from common.py
+categorize = categorize_hand
 
 
 def compute_metric(meta: Dict[str, Any], *, prefer: str) -> Tuple[float, Dict[str, Any]]:
-    """Return (metric_value, extras) given meta and preference.
-
-    prefer: 'tokens' | 'chars' | 'words'
-    - tokens: use usage.total_tokens - usage.prompt_tokens if present, else chars
-    - chars: len(llm_thinking) if present, else 0
-    - words: space-split length of llm_thinking
+    """
+    Compute thinking metric from event metadata.
+    
+    Args:
+        meta: Event metadata dictionary
+        prefer: Metric type - 'tokens', 'chars', or 'words'
+            - tokens: completion_tokens from usage if available, else chars
+            - chars: length of llm_thinking string if present, else 0
+            - words: word count of llm_thinking string
+    
+    Returns:
+        Tuple of (metric_value, extras_dict)
     """
     thinking = meta.get("llm_thinking")
     usage = meta.get("llm_usage") or {}
     prompt = usage.get("prompt_tokens")
     total = usage.get("total_tokens")
-    out_tokens = None
-    try:
-        if isinstance(total, (int, float)) and isinstance(prompt, (int, float)):
+    
+    # Calculate completion tokens safely
+    out_tokens: Optional[float] = None
+    if isinstance(total, (int, float)) and isinstance(prompt, (int, float)):
+        try:
             out_tokens = float(total) - float(prompt)
-    except Exception:
-        out_tokens = None
+        except (ValueError, TypeError):
+            out_tokens = None
 
+    # Return appropriate metric based on preference
     if prefer == "tokens" and out_tokens is not None:
-        return out_tokens, {"out_tokens": out_tokens, "prompt_tokens": prompt, "total_tokens": total}
+        return out_tokens, {
+            "out_tokens": out_tokens, 
+            "prompt_tokens": prompt, 
+            "total_tokens": total
+        }
+    
     if prefer == "words" and isinstance(thinking, str):
-        w = float(len([w for w in thinking.split() if w]))
-        return w, {"words": w}
-    # default to chars
-    n = float(len(thinking)) if isinstance(thinking, str) else 0.0
-    return n, {"chars": n, "out_tokens": out_tokens, "prompt_tokens": prompt, "total_tokens": total}
+        word_count = float(len([w for w in thinking.split() if w.strip()]))
+        return word_count, {"words": word_count}
+    
+    # Default to character count
+    char_count = float(len(thinking)) if isinstance(thinking, str) else 0.0
+    return char_count, {
+        "chars": char_count, 
+        "out_tokens": out_tokens, 
+        "prompt_tokens": prompt, 
+        "total_tokens": total
+    }
 
 
 def main():
@@ -197,7 +173,7 @@ def main():
                 return
 
             # Calculate widths
-            header = ["player\dealer"] + dealer_cols
+            header = ["player\\dealer"] + dealer_cols
             widths = [max(len(header[i]), max((len(row[i]) for row in table_data), default=0)) for i in range(len(header))]
 
             # Print header
