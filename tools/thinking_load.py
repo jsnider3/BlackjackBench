@@ -33,6 +33,11 @@ def compute_metric(meta: Dict[str, Any], *, prefer: str) -> Tuple[float, Dict[st
     prompt = usage.get("prompt_tokens")
     total = usage.get("total_tokens")
     
+    # If we have explicit thinking text, prefer its character length regardless of metric
+    if isinstance(thinking, str) and thinking:
+        char_count = float(len(thinking))
+        return char_count, {"chars": char_count}
+
     # Calculate completion tokens safely
     out_tokens: Optional[float] = None
     if isinstance(total, (int, float)) and isinstance(prompt, (int, float)):
@@ -41,7 +46,7 @@ def compute_metric(meta: Dict[str, Any], *, prefer: str) -> Tuple[float, Dict[st
         except (ValueError, TypeError):
             out_tokens = None
 
-    # Return appropriate metric based on preference
+    # Return appropriate metric based on preference (fallback path)
     if prefer == "tokens" and out_tokens is not None:
         return out_tokens, {
             "out_tokens": out_tokens, 
@@ -53,8 +58,8 @@ def compute_metric(meta: Dict[str, Any], *, prefer: str) -> Tuple[float, Dict[st
         word_count = float(len([w for w in thinking.split() if w.strip()]))
         return word_count, {"words": word_count}
     
-    # Default to character count
-    char_count = float(len(thinking)) if isinstance(thinking, str) else 0.0
+    # Default to character count when no thinking text was present (0.0)
+    char_count = 0.0
     return char_count, {
         "chars": char_count, 
         "out_tokens": out_tokens, 

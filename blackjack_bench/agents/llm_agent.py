@@ -265,10 +265,13 @@ class LLMAgent:
                         ],
                     }
                 
-                # Some models (like GPT-5-Nano) don't support temperature=0.0
-                if "gpt-5-nano" in model and temperature == 0.0:
-                    pass  # Don't add temperature, use model default (1.0)
-                elif temperature != 1.0:  # Only add temperature if it's not the default
+                # Temperature handling:
+                # New OpenAI reasoning models (e.g., GPT-5 family, o1/o3/o4) do not support
+                # overriding temperature; only the default is allowed. Avoid sending the
+                # parameter entirely for those models to prevent 400 errors.
+                mdl = model.lower()
+                supports_temperature = not any(x in mdl for x in ["gpt-5", "o1", "o3", "o4"])
+                if supports_temperature and temperature != 1.0:
                     request_params["temperature"] = temperature
 
                 # Add API-specific parameters
@@ -285,11 +288,7 @@ class LLMAgent:
                         request_params["reasoning_effort"] = effort_map[reasoning]
                         print(f"[openai-debug] Reasoning enabled: effort={effort_map[reasoning]}")
                     
-                    # Add temperature for Chat Completions
-                    if "gpt-5-nano" in model and temperature == 0.0:
-                        pass  # Don't add temperature, use model default (1.0)
-                    elif temperature != 1.0:  # Only add temperature if it's not the default
-                        request_params["temperature"] = temperature
+                    # Temperature already handled above to avoid duplication and model caps
                 
                 # Debug: Log the request being made (minimal)
                 api_type = "Responses" if (is_reasoning_model and reasoning != "none") else "Chat Completions"

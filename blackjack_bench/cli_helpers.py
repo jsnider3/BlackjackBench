@@ -180,24 +180,31 @@ def prepare_heartbeat_info(args, processed_pairs: Set[Tuple[str, str, str, int]]
             num_shards = max(1, int(getattr(args, "num_shards", 1) or 1))
         except Exception:
             shard_idx, num_shards = 0, 1
-        
+
+        # Determine which (p1,p2,du) cells belong to this shard
         shard_cells = 0
+        shard_cell_keys: Set[Tuple[str, str, str]] = set()
         ci = 0
         for i, r1 in enumerate(ranks):
             for r2 in ranks[i:]:
                 for _du in dealer_up:
                     if ci % num_shards == shard_idx:
                         shard_cells += 1
+                        shard_cell_keys.add((r1, r2, _du))
                     ci += 1
-        
+
         total_cells_for_heartbeat = shard_cells * args.reps
         shard_tag = f" shard={shard_idx+1}/{num_shards}" if num_shards > 1 else ""
         print(f"[start]{shard_tag} policy-grid: reps={args.reps}, total_cells={total_cells_for_heartbeat}")
-        
+
+        # Filter processed_pairs in-place to only this shard's cells so progress stays <= 100%
         if processed_pairs:
-            done = len(processed_pairs)
-            pct = (done / total_cells_for_heartbeat) * 100 if total_cells_for_heartbeat else 0
-            print(f"[resume]{shard_tag} already completed: {done}/{total_cells_for_heartbeat} ({pct:.1f}%)")
+            allowed = {(p1, p2, du, rep) for (p1, p2, du, rep) in processed_pairs if (p1, p2, du) in shard_cell_keys}
+            processed_pairs.clear()
+            processed_pairs.update(allowed)
+            done_shard = len(processed_pairs)
+            pct = (done_shard / total_cells_for_heartbeat) * 100 if total_cells_for_heartbeat else 0
+            print(f"[resume]{shard_tag} already completed: {done_shard}/{total_cells_for_heartbeat} ({pct:.1f}%)")
     
     return shard_tag, total_cells_for_heartbeat
 

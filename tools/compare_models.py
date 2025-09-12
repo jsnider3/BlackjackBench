@@ -31,8 +31,8 @@ def analyze_file(path: Path, track: str = "policy-grid") -> Dict[str, Any]:
     category_decisions: Dict[str, int] = defaultdict(int)
     category_mistakes: Dict[str, int] = defaultdict(int)
     
-    # Thinking analysis (for LLM models)
-    thinking_tokens: List[float] = []
+    # Thinking analysis: prefer length of llm_thinking text; fallback to token deltas
+    thinking_values: List[float] = []
     has_thinking = False
     
     for ev in load_events(path):
@@ -71,15 +71,25 @@ def analyze_file(path: Path, track: str = "policy-grid") -> Dict[str, Any]:
             mistakes += 1
             category_mistakes[category] += 1
             
-        # Thinking analysis
+        # Thinking analysis (auto): use length of llm_thinking if available; else token delta if present
         meta = ev.get("meta") or {}
-        if "llm_thinking" in meta:
+        llm_thinking = meta.get("llm_thinking")
+        if isinstance(llm_thinking, str) and llm_thinking:
             has_thinking = True
+            try:
+                thinking_values.append(float(len(llm_thinking)))
+            except Exception:
+                pass
+        else:
             usage = meta.get("llm_usage") or {}
             prompt_tokens = usage.get("prompt_tokens")
             total_tokens = usage.get("total_tokens")
             if isinstance(total_tokens, (int, float)) and isinstance(prompt_tokens, (int, float)):
-                thinking_tokens.append(float(total_tokens) - float(prompt_tokens))
+                has_thinking = True
+                try:
+                    thinking_values.append(float(total_tokens) - float(prompt_tokens))
+                except Exception:
+                    pass
     
     # Calculate weighted EV and collect per-hand rewards for confidence intervals
     by_cell: Dict[Cell, List[float]] = defaultdict(list)
@@ -132,13 +142,14 @@ def analyze_file(path: Path, track: str = "policy-grid") -> Dict[str, Any]:
         }
     }
     
-    if has_thinking and thinking_tokens:
+    if has_thinking and thinking_values:
         result["thinking"] = {
             "has_thinking": True,
-            "avg_tokens": statistics.mean(thinking_tokens),
-            "median_tokens": statistics.median(thinking_tokens),
-            "max_tokens": max(thinking_tokens),
-            "min_tokens": min(thinking_tokens)
+            # Note: values represent len(llm_thinking) when available; else token delta
+            "avg_tokens": statistics.mean(thinking_values),
+            "median_tokens": statistics.median(thinking_values),
+            "max_tokens": max(thinking_values),
+            "min_tokens": min(thinking_values)
         }
     else:
         result["thinking"] = {"has_thinking": False}
