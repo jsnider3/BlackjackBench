@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlackJack Bench Comprehensive Analysis</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; border-left: 4px solid #3498db; padding-left: 15px; }
+        h3 { color: #7f8c8d; }
+        .summary { background: #ecf0f1; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .metric { display: inline-block; margin: 10px 20px 10px 0; }
+        .metric-value { font-size: 1.5em; font-weight: bold; color: #2980b9; }
+        .metric-label { font-size: 0.9em; color: #7f8c8d; }
+        pre { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 0.9em; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #bdc3c7; }
+        th { background-color: #34495e; color: white; }
+        tr:hover { background-color: #ecf0f1; }
+        .error { background: #e74c3c; color: white; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .success { background: #27ae60; color: white; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .warning { background: #f39c12; color: white; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .collapsible { cursor: pointer; padding: 10px; background: #34495e; color: white; border: none; width: 100%; text-align: left; border-radius: 5px; margin: 5px 0; }
+        .collapsible:hover { background: #2c3e50; }
+        .content { max-height: 0; overflow: hidden; transition: max-height 0.2s ease-out; background: #ecf0f1; border-radius: 0 0 5px 5px; }
+        .content.active { max-height: 1000px; padding: 15px; }
+        .timestamp { color: #95a5a6; font-size: 0.9em; }
+    </style>
+    <script>
+        function toggleContent(element) {
+            const content = element.nextElementSibling;
+            content.classList.toggle('active');
+            element.textContent = content.classList.contains('active') ? 
+                element.textContent.replace('▶', '▼') : 
+                element.textContent.replace('▼', '▶');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>BlackJack Bench Comprehensive Analysis</h1>
+        <div class="timestamp">Generated on 2025-09-11 06:36:58</div>
+        
+        
+        <h2>Executive Summary</h2>
+        <div class="summary">
+            <div class="metric">
+                <div class="metric-value">10</div>
+                <div class="metric-label">Models Analyzed</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">basic</div>
+                <div class="metric-label">Best Performing Model</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">0.026</div>
+                <div class="metric-label">Best Weighted EV</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">45,980</div>
+                <div class="metric-label">Total Decisions Analyzed</div>
+            </div>
+        </div>
+        
+
+        <h2>Model Comparison</h2>
+        <button class="collapsible" onclick="toggleContent(this)">▶ Model Performance Comparison</button>
+        <div class="content">
+            <pre>Analyzing 10 model files...
+Model                                 Decisions  Mistakes  Mistake Rate  Weighted EV  95% CI              Hands  Cells  Avg Thinking Tokens  Max Thinking Tokens
+basic                                 4368       0         0.000         0.026127     [-0.0267, 0.0721]   2750   550    N/A                  N/A                
+claude-sonnet-4-20250514-thinking     4281       173       0.040         0.026036     [-0.0276, 0.0723]   2750   550    278                  1070               
+gemini-2-5-flash-thinking             4345       262       0.060         0.022394     [-0.0450, 0.0556]   2750   550    575                  2040               
+gemini-2-5-pro                        4358       90        0.021         0.012107     [-0.0442, 0.0555]   2750   550    893                  7778               
+claude-sonnet-4-20250514-no-thinking  4979       1795      0.361         -0.078198    [-0.2323, -0.1259]  2750   550    N/A                  N/A                
+openrouter-sonoma-sky-alpha           2669       1937      0.726         -0.126172    [-0.2677, -0.1952]  2750   550    N/A                  N/A                
+openrouter-sonoma-dusk-alpha          4644       1985      0.427         -0.205007    [-0.3597, -0.2530]  2750   550    N/A                  N/A                
+gemini-2-5-flash-lite                 3877       2386      0.615         -0.418844    [-0.4570, -0.3157]  2750   550    N/A                  N/A                
+gemini-2-5-flash-no-thinking          5825       3237      0.556         -0.639599    [-0.8100, -0.7183]  2750   550    N/A                  N/A                
+gemma3-12b-it-qat                     6634       4280      0.645         -0.844060    [-1.0628, -1.0183]  2750   550    N/A                  N/A                
+--------------------------------------------------------------------------------
+
+# Statistical Comparison (10 models)
+
+Ranking by Weighted EV:
+  1. basic: 0.026127 (±0.000 mistake rate)
+  2. claude-sonnet-4-20250514-thinking: 0.026036 (±0.040 mistake rate)
+  3. gemini-2-5-flash-thinking: 0.022394 (±0.060 mistake rate)
+  4. gemini-2-5-pro: 0.012107 (±0.021 mistake rate)
+  5. claude-sonnet-4-20250514-no-thinking: -0.078198 (±0.361 mistake rate)
+  6. openrouter-sonoma-sky-alpha: -0.126172 (±0.726 mistake rate)
+  7. openrouter-sonoma-dusk-alpha: -0.205007 (±0.427 mistake rate)
+  8. gemini-2-5-flash-lite: -0.418844 (±0.615 mistake rate)
+  9. gemini-2-5-flash-no-thinking: -0.639599 (±0.556 mistake rate)
+  10. gemma3-12b-it-qat: -0.844060 (±0.645 mistake rate)
+
+Top performer (basic) vs second (claude-sonnet-4-20250514-thinking):
+  EV advantage: +0.000091 units/hand
+  Mistake rate advantage: +0.040
+
+# Category Breakdown
+
+## hard 10
+  basic: 0/186 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 11/185 (0.059 mistake rate)
+  gemini-2-5-flash-thinking: 34/189 (0.180 mistake rate)
+  gemini-2-5-pro: 6/186 (0.032 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 98/194 (0.505 mistake rate)
+  openrouter-sonoma-sky-alpha: 147/147 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 114/189 (0.603 mistake rate)
+  gemini-2-5-flash-lite: 29/187 (0.155 mistake rate)
+  gemini-2-5-flash-no-thinking: 134/198 (0.677 mistake rate)
+  gemma3-12b-it-qat: 154/199 (0.774 mistake rate)
+
+## hard 11
+  basic: 0/257 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 33/258 (0.128 mistake rate)
+  gemini-2-5-flash-thinking: 26/257 (0.101 mistake rate)
+  gemini-2-5-pro: 3/257 (0.012 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 165/266 (0.620 mistake rate)
+  openrouter-sonoma-sky-alpha: 196/196 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 158/271 (0.583 mistake rate)
+  gemini-2-5-flash-lite: 69/255 (0.271 mistake rate)
+  gemini-2-5-flash-no-thinking: 196/282 (0.695 mistake rate)
+  gemma3-12b-it-qat: 245/283 (0.866 mistake rate)
+
+## hard 12
+  basic: 0/295 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 9/292 (0.031 mistake rate)
+  gemini-2-5-flash-thinking: 10/293 (0.034 mistake rate)
+  gemini-2-5-pro: 0/293 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 84/333 (0.252 mistake rate)
+  openrouter-sonoma-sky-alpha: 137/197 (0.695 mistake rate)
+  openrouter-sonoma-dusk-alpha: 86/314 (0.274 mistake rate)
+  gemini-2-5-flash-lite: 220/281 (0.783 mistake rate)
+  gemini-2-5-flash-no-thinking: 104/361 (0.288 mistake rate)
+  gemma3-12b-it-qat: 123/395 (0.311 mistake rate)
+
+## hard 13
+  basic: 0/330 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 4/324 (0.012 mistake rate)
+  gemini-2-5-flash-thinking: 32/321 (0.100 mistake rate)
+  gemini-2-5-pro: 12/330 (0.036 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 169/380 (0.445 mistake rate)
+  openrouter-sonoma-sky-alpha: 99/199 (0.497 mistake rate)
+  openrouter-sonoma-dusk-alpha: 135/347 (0.389 mistake rate)
+  gemini-2-5-flash-lite: 223/318 (0.701 mistake rate)
+  gemini-2-5-flash-no-thinking: 192/410 (0.468 mistake rate)
+  gemma3-12b-it-qat: 226/454 (0.498 mistake rate)
+
+## hard 14
+  basic: 0/271 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 4/254 (0.016 mistake rate)
+  gemini-2-5-flash-thinking: 13/264 (0.049 mistake rate)
+  gemini-2-5-pro: 6/268 (0.022 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 122/321 (0.380 mistake rate)
+  openrouter-sonoma-sky-alpha: 71/146 (0.486 mistake rate)
+  openrouter-sonoma-dusk-alpha: 117/306 (0.382 mistake rate)
+  gemini-2-5-flash-lite: 186/238 (0.782 mistake rate)
+  gemini-2-5-flash-no-thinking: 177/376 (0.471 mistake rate)
+  gemma3-12b-it-qat: 224/435 (0.515 mistake rate)
+
+## hard 15
+  basic: 0/280 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 1/272 (0.004 mistake rate)
+  gemini-2-5-flash-thinking: 25/278 (0.090 mistake rate)
+  gemini-2-5-pro: 10/278 (0.036 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 108/332 (0.325 mistake rate)
+  openrouter-sonoma-sky-alpha: 75/150 (0.500 mistake rate)
+  openrouter-sonoma-dusk-alpha: 86/304 (0.283 mistake rate)
+  gemini-2-5-flash-lite: 165/225 (0.733 mistake rate)
+  gemini-2-5-flash-no-thinking: 178/393 (0.453 mistake rate)
+  gemma3-12b-it-qat: 231/455 (0.508 mistake rate)
+
+## hard 16
+  basic: 0/280 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 1/275 (0.004 mistake rate)
+  gemini-2-5-flash-thinking: 11/270 (0.041 mistake rate)
+  gemini-2-5-pro: 1/279 (0.004 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 91/299 (0.304 mistake rate)
+  openrouter-sonoma-sky-alpha: 48/98 (0.490 mistake rate)
+  openrouter-sonoma-dusk-alpha: 79/261 (0.303 mistake rate)
+  gemini-2-5-flash-lite: 141/197 (0.716 mistake rate)
+  gemini-2-5-flash-no-thinking: 153/366 (0.418 mistake rate)
+  gemma3-12b-it-qat: 218/423 (0.515 mistake rate)
+
+## hard 17
+  basic: 0/308 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 1/299 (0.003 mistake rate)
+  gemini-2-5-flash-thinking: 12/301 (0.040 mistake rate)
+  gemini-2-5-pro: 0/306 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 158/334 (0.473 mistake rate)
+  openrouter-sonoma-sky-alpha: 0/100 (0.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 125/293 (0.427 mistake rate)
+  gemini-2-5-flash-lite: 190/198 (0.960 mistake rate)
+  gemini-2-5-flash-no-thinking: 365/400 (0.912 mistake rate)
+  gemma3-12b-it-qat: 469/474 (0.989 mistake rate)
+
+## hard 18
+  basic: 0/234 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/230 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 8/241 (0.033 mistake rate)
+  gemini-2-5-pro: 8/233 (0.034 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 104/252 (0.413 mistake rate)
+  openrouter-sonoma-sky-alpha: 0/50 (0.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 107/220 (0.486 mistake rate)
+  gemini-2-5-flash-lite: 120/145 (0.828 mistake rate)
+  gemini-2-5-flash-no-thinking: 322/346 (0.931 mistake rate)
+  gemma3-12b-it-qat: 425/433 (0.982 mistake rate)
+
+## hard 19
+  basic: 0/171 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/170 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/176 (0.000 mistake rate)
+  gemini-2-5-pro: 0/175 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 74/269 (0.275 mistake rate)
+  openrouter-sonoma-sky-alpha: 0/49 (0.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 117/232 (0.504 mistake rate)
+  gemini-2-5-flash-lite: 136/167 (0.814 mistake rate)
+  gemini-2-5-flash-no-thinking: 323/351 (0.920 mistake rate)
+  gemma3-12b-it-qat: 457/462 (0.989 mistake rate)
+
+## hard 20
+  basic: 0/92 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/83 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/81 (0.000 mistake rate)
+  gemini-2-5-pro: 0/91 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 36/179 (0.201 mistake rate)
+  openrouter-sonoma-dusk-alpha: 107/155 (0.690 mistake rate)
+  gemini-2-5-flash-lite: 41/64 (0.641 mistake rate)
+  gemini-2-5-flash-no-thinking: 265/300 (0.883 mistake rate)
+  gemma3-12b-it-qat: 398/401 (0.993 mistake rate)
+
+## hard 21
+  basic: 0/69 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/65 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/69 (0.000 mistake rate)
+  gemini-2-5-pro: 0/71 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 39/175 (0.223 mistake rate)
+  openrouter-sonoma-dusk-alpha: 83/146 (0.568 mistake rate)
+  gemini-2-5-flash-lite: 43/62 (0.694 mistake rate)
+  gemini-2-5-flash-no-thinking: 277/301 (0.920 mistake rate)
+  gemma3-12b-it-qat: 420/425 (0.988 mistake rate)
+
+## hard 5
+  basic: 0/51 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/50 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/53 (0.000 mistake rate)
+  gemini-2-5-pro: 0/51 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 11/59 (0.186 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 26/59 (0.441 mistake rate)
+  gemini-2-5-flash-lite: 22/59 (0.373 mistake rate)
+  gemini-2-5-flash-no-thinking: 0/59 (0.000 mistake rate)
+  gemma3-12b-it-qat: 0/59 (0.000 mistake rate)
+
+## hard 6
+  basic: 0/52 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/50 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/53 (0.000 mistake rate)
+  gemini-2-5-pro: 0/52 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 20/66 (0.303 mistake rate)
+  openrouter-sonoma-sky-alpha: 49/49 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 20/66 (0.303 mistake rate)
+  gemini-2-5-flash-lite: 44/66 (0.667 mistake rate)
+  gemini-2-5-flash-no-thinking: 5/66 (0.076 mistake rate)
+  gemma3-12b-it-qat: 0/66 (0.000 mistake rate)
+
+## hard 7
+  basic: 0/109 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 3/108 (0.028 mistake rate)
+  gemini-2-5-flash-thinking: 0/110 (0.000 mistake rate)
+  gemini-2-5-pro: 0/109 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 38/121 (0.314 mistake rate)
+  openrouter-sonoma-sky-alpha: 100/100 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 59/121 (0.488 mistake rate)
+  gemini-2-5-flash-lite: 68/115 (0.591 mistake rate)
+  gemini-2-5-flash-no-thinking: 11/122 (0.090 mistake rate)
+  gemma3-12b-it-qat: 0/122 (0.000 mistake rate)
+
+## hard 8
+  basic: 0/112 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 13/111 (0.117 mistake rate)
+  gemini-2-5-flash-thinking: 0/110 (0.000 mistake rate)
+  gemini-2-5-pro: 0/112 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 44/122 (0.361 mistake rate)
+  openrouter-sonoma-sky-alpha: 100/100 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 52/124 (0.419 mistake rate)
+  gemini-2-5-flash-lite: 91/115 (0.791 mistake rate)
+  gemini-2-5-flash-no-thinking: 4/125 (0.032 mistake rate)
+  gemma3-12b-it-qat: 1/124 (0.008 mistake rate)
+
+## hard 9
+  basic: 0/180 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 10/179 (0.056 mistake rate)
+  gemini-2-5-flash-thinking: 9/188 (0.048 mistake rate)
+  gemini-2-5-pro: 0/180 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 22/204 (0.108 mistake rate)
+  openrouter-sonoma-sky-alpha: 148/148 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 42/203 (0.207 mistake rate)
+  gemini-2-5-flash-lite: 49/196 (0.250 mistake rate)
+  gemini-2-5-flash-no-thinking: 64/211 (0.303 mistake rate)
+  gemma3-12b-it-qat: 84/213 (0.394 mistake rate)
+
+## pair 10/10
+  basic: 0/48 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/48 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/48 (0.000 mistake rate)
+  gemini-2-5-pro: 0/48 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 0/48 (0.000 mistake rate)
+  openrouter-sonoma-sky-alpha: 0/48 (0.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 3/48 (0.062 mistake rate)
+  gemini-2-5-flash-lite: 5/48 (0.104 mistake rate)
+  gemini-2-5-flash-no-thinking: 10/48 (0.208 mistake rate)
+  gemma3-12b-it-qat: 5/48 (0.104 mistake rate)
+
+## pair 2/2
+  basic: 0/47 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/47 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 7/47 (0.149 mistake rate)
+  gemini-2-5-pro: 0/47 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 17/47 (0.362 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 17/47 (0.362 mistake rate)
+  gemini-2-5-flash-lite: 17/47 (0.362 mistake rate)
+  gemini-2-5-flash-no-thinking: 17/47 (0.362 mistake rate)
+  gemma3-12b-it-qat: 17/47 (0.362 mistake rate)
+
+## pair 3/3
+  basic: 0/46 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 2/46 (0.043 mistake rate)
+  gemini-2-5-flash-thinking: 5/46 (0.109 mistake rate)
+  gemini-2-5-pro: 0/46 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 16/46 (0.348 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 16/46 (0.348 mistake rate)
+  gemini-2-5-flash-lite: 16/46 (0.348 mistake rate)
+  gemini-2-5-flash-no-thinking: 16/46 (0.348 mistake rate)
+  gemma3-12b-it-qat: 16/46 (0.348 mistake rate)
+
+## pair 4/4
+  basic: 0/48 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 9/48 (0.188 mistake rate)
+  gemini-2-5-flash-thinking: 4/48 (0.083 mistake rate)
+  gemini-2-5-pro: 0/48 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 38/48 (0.792 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 38/48 (0.792 mistake rate)
+  gemini-2-5-flash-lite: 38/48 (0.792 mistake rate)
+  gemini-2-5-flash-no-thinking: 38/48 (0.792 mistake rate)
+  gemma3-12b-it-qat: 38/48 (0.792 mistake rate)
+
+## pair 5/5
+  basic: 0/47 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 2/47 (0.043 mistake rate)
+  gemini-2-5-flash-thinking: 5/47 (0.106 mistake rate)
+  gemini-2-5-pro: 1/47 (0.021 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 47/47 (1.000 mistake rate)
+  openrouter-sonoma-sky-alpha: 49/49 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 47/47 (1.000 mistake rate)
+  gemini-2-5-flash-lite: 7/47 (0.149 mistake rate)
+  gemini-2-5-flash-no-thinking: 45/47 (0.957 mistake rate)
+  gemma3-12b-it-qat: 47/47 (1.000 mistake rate)
+
+## pair 6/6
+  basic: 0/49 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 2/49 (0.041 mistake rate)
+  gemini-2-5-flash-thinking: 5/49 (0.102 mistake rate)
+  gemini-2-5-pro: 1/49 (0.020 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 24/49 (0.490 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 24/49 (0.490 mistake rate)
+  gemini-2-5-flash-lite: 24/49 (0.490 mistake rate)
+  gemini-2-5-flash-no-thinking: 24/49 (0.490 mistake rate)
+  gemma3-12b-it-qat: 24/49 (0.490 mistake rate)
+
+## pair 7/7
+  basic: 0/49 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 4/49 (0.082 mistake rate)
+  gemini-2-5-flash-thinking: 3/49 (0.061 mistake rate)
+  gemini-2-5-pro: 1/49 (0.020 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 19/49 (0.388 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 19/49 (0.388 mistake rate)
+  gemini-2-5-flash-lite: 19/49 (0.388 mistake rate)
+  gemini-2-5-flash-no-thinking: 19/49 (0.388 mistake rate)
+  gemma3-12b-it-qat: 24/49 (0.490 mistake rate)
+
+## pair 8/8
+  basic: 0/48 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/48 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/48 (0.000 mistake rate)
+  gemini-2-5-pro: 1/48 (0.021 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 0/48 (0.000 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 5/48 (0.104 mistake rate)
+  gemini-2-5-flash-lite: 0/48 (0.000 mistake rate)
+  gemini-2-5-flash-no-thinking: 0/48 (0.000 mistake rate)
+  gemma3-12b-it-qat: 0/48 (0.000 mistake rate)
+
+## pair 9/9
+  basic: 0/50 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 4/50 (0.080 mistake rate)
+  gemini-2-5-flash-thinking: 0/50 (0.000 mistake rate)
+  gemini-2-5-pro: 1/50 (0.020 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 5/50 (0.100 mistake rate)
+  openrouter-sonoma-sky-alpha: 35/50 (0.700 mistake rate)
+  openrouter-sonoma-dusk-alpha: 15/50 (0.300 mistake rate)
+  gemini-2-5-flash-lite: 15/50 (0.300 mistake rate)
+  gemini-2-5-flash-no-thinking: 15/50 (0.300 mistake rate)
+  gemma3-12b-it-qat: 15/50 (0.300 mistake rate)
+
+## pair A/A
+  basic: 0/47 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/47 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/47 (0.000 mistake rate)
+  gemini-2-5-pro: 0/47 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 0/47 (0.000 mistake rate)
+  openrouter-sonoma-sky-alpha: 48/48 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 0/47 (0.000 mistake rate)
+  gemini-2-5-flash-lite: 0/47 (0.000 mistake rate)
+  gemini-2-5-flash-no-thinking: 0/47 (0.000 mistake rate)
+  gemma3-12b-it-qat: 0/47 (0.000 mistake rate)
+
+## soft 13
+  basic: 0/61 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 5/61 (0.082 mistake rate)
+  gemini-2-5-flash-thinking: 3/62 (0.048 mistake rate)
+  gemini-2-5-pro: 0/61 (0.000 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 11/64 (0.172 mistake rate)
+  openrouter-sonoma-sky-alpha: 49/49 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 29/64 (0.453 mistake rate)
+  gemini-2-5-flash-lite: 51/64 (0.797 mistake rate)
+  gemini-2-5-flash-no-thinking: 10/64 (0.156 mistake rate)
+  gemma3-12b-it-qat: 13/64 (0.203 mistake rate)
+
+## soft 14
+  basic: 0/60 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 11/60 (0.183 mistake rate)
+  gemini-2-5-flash-thinking: 11/61 (0.180 mistake rate)
+  gemini-2-5-pro: 1/60 (0.017 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 37/64 (0.578 mistake rate)
+  openrouter-sonoma-sky-alpha: 49/49 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 46/61 (0.754 mistake rate)
+  gemini-2-5-flash-lite: 48/61 (0.787 mistake rate)
+  gemini-2-5-flash-no-thinking: 4/64 (0.062 mistake rate)
+  gemma3-12b-it-qat: 16/64 (0.250 mistake rate)
+
+## soft 15
+  basic: 0/55 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 10/54 (0.185 mistake rate)
+  gemini-2-5-flash-thinking: 7/54 (0.130 mistake rate)
+  gemini-2-5-pro: 5/55 (0.091 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 34/62 (0.548 mistake rate)
+  openrouter-sonoma-sky-alpha: 48/48 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 47/60 (0.783 mistake rate)
+  gemini-2-5-flash-lite: 44/58 (0.759 mistake rate)
+  gemini-2-5-flash-no-thinking: 9/61 (0.148 mistake rate)
+  gemma3-12b-it-qat: 15/61 (0.246 mistake rate)
+
+## soft 16
+  basic: 0/62 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 5/62 (0.081 mistake rate)
+  gemini-2-5-flash-thinking: 9/64 (0.141 mistake rate)
+  gemini-2-5-pro: 5/62 (0.081 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 39/69 (0.565 mistake rate)
+  openrouter-sonoma-sky-alpha: 50/50 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 51/65 (0.785 mistake rate)
+  gemini-2-5-flash-lite: 44/56 (0.786 mistake rate)
+  gemini-2-5-flash-no-thinking: 11/71 (0.155 mistake rate)
+  gemma3-12b-it-qat: 10/72 (0.139 mistake rate)
+
+## soft 17
+  basic: 0/72 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 12/73 (0.164 mistake rate)
+  gemini-2-5-flash-thinking: 13/75 (0.173 mistake rate)
+  gemini-2-5-pro: 12/71 (0.169 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 32/73 (0.438 mistake rate)
+  openrouter-sonoma-sky-alpha: 49/49 (1.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 44/68 (0.647 mistake rate)
+  gemini-2-5-flash-lite: 51/62 (0.823 mistake rate)
+  gemini-2-5-flash-no-thinking: 18/75 (0.240 mistake rate)
+  gemma3-12b-it-qat: 13/81 (0.160 mistake rate)
+
+## soft 18
+  basic: 0/89 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 8/88 (0.091 mistake rate)
+  gemini-2-5-flash-thinking: 4/89 (0.045 mistake rate)
+  gemini-2-5-pro: 3/88 (0.034 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 26/78 (0.333 mistake rate)
+  openrouter-sonoma-sky-alpha: 35/50 (0.700 mistake rate)
+  openrouter-sonoma-dusk-alpha: 33/69 (0.478 mistake rate)
+  gemini-2-5-flash-lite: 42/68 (0.618 mistake rate)
+  gemini-2-5-flash-no-thinking: 47/96 (0.490 mistake rate)
+  gemma3-12b-it-qat: 72/102 (0.706 mistake rate)
+
+## soft 19
+  basic: 0/80 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 9/76 (0.118 mistake rate)
+  gemini-2-5-flash-thinking: 6/79 (0.076 mistake rate)
+  gemini-2-5-pro: 9/79 (0.114 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 24/72 (0.333 mistake rate)
+  openrouter-sonoma-sky-alpha: 5/50 (0.100 mistake rate)
+  openrouter-sonoma-dusk-alpha: 12/63 (0.190 mistake rate)
+  gemini-2-5-flash-lite: 53/60 (0.883 mistake rate)
+  gemini-2-5-flash-no-thinking: 67/82 (0.817 mistake rate)
+  gemma3-12b-it-qat: 85/87 (0.977 mistake rate)
+
+## soft 20
+  basic: 0/89 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/85 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/86 (0.000 mistake rate)
+  gemini-2-5-pro: 1/89 (0.011 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 21/72 (0.292 mistake rate)
+  openrouter-sonoma-sky-alpha: 0/50 (0.000 mistake rate)
+  openrouter-sonoma-dusk-alpha: 14/69 (0.203 mistake rate)
+  gemini-2-5-flash-lite: 57/63 (0.905 mistake rate)
+  gemini-2-5-flash-no-thinking: 69/106 (0.651 mistake rate)
+  gemma3-12b-it-qat: 123/125 (0.984 mistake rate)
+
+## soft 21
+  basic: 0/44 (0.000 mistake rate)
+  claude-sonnet-4-20250514-thinking: 0/38 (0.000 mistake rate)
+  gemini-2-5-flash-thinking: 0/42 (0.000 mistake rate)
+  gemini-2-5-pro: 3/43 (0.070 mistake rate)
+  claude-sonnet-4-20250514-no-thinking: 22/40 (0.550 mistake rate)
+  openrouter-sonoma-dusk-alpha: 12/35 (0.343 mistake rate)
+  gemini-2-5-flash-lite: 18/18 (1.000 mistake rate)
+  gemini-2-5-flash-no-thinking: 48/60 (0.800 mistake rate)
+  gemma3-12b-it-qat: 72/76 (0.947 mistake rate)
+</pre>
+        </div>
+        
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - basic</button>
+                <div class="content">
+                    <pre>(no leaks to report)
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - gemma3-12b-it-qat</button>
+                <div class="content">
+                    <pre>category    dealer  baseline  agent  mistakes  weighted_share
+pair 10/10  10      STAND     SPLIT         5          0.0646
+hard 17     10      STAND     HIT          10          0.0404
+hard 18     10      STAND     HIT           5          0.0323
+hard 19     10      STAND     HIT           5          0.0323
+hard 11     10      DOUBLE    HIT          20          0.0323
+hard 12     4       STAND     HIT          20          0.0141
+hard 12     5       STAND     HIT          20          0.0141
+hard 12     6       STAND     HIT          20          0.0141
+hard 13     2       STAND     HIT          20          0.0141
+hard 13     3       STAND     HIT          20          0.0141
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - openrouter-sonoma-dusk-alpha</button>
+                <div class="content">
+                    <pre>category  dealer  baseline  agent   mistakes  weighted_share
+hard 15   10      HIT       STAND          9          0.0619
+hard 12   10      HIT       STAND          6          0.0542
+hard 11   10      DOUBLE    HIT           17          0.0439
+hard 16   10      HIT       STAND          7          0.0335
+hard 14   10      HIT       STAND          2          0.0206
+hard 13   A       HIT       DOUBLE        12          0.0155
+hard 13   6       STAND     DOUBLE        14          0.0148
+hard 12   3       HIT       STAND          6          0.0135
+hard 13   2       STAND     HIT           15          0.0135
+soft 14   10      HIT       DOUBLE         5          0.0129
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - openrouter-sonoma-sky-alpha</button>
+                <div class="content">
+                    <pre>category  dealer  baseline  agent  mistakes  weighted_share
+hard 12   10      HIT       STAND        20          0.0472
+hard 13   10      HIT       STAND        20          0.0472
+hard 14   10      HIT       STAND        15          0.0405
+hard 15   10      HIT       STAND        15          0.0405
+hard 16   10      HIT       STAND         9          0.0283
+hard 11   10      DOUBLE    STAND        20          0.0270
+hard 9    10      HIT       STAND        15          0.0202
+hard 10   10      HIT       STAND        15          0.0202
+hard 7    10      HIT       STAND        10          0.0135
+hard 8    10      HIT       STAND        10          0.0135
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - gemini-2-5-flash-lite</button>
+                <div class="content">
+                    <pre>category    dealer  baseline  agent   mistakes  weighted_share
+hard 14     10      HIT       DOUBLE        10          0.0301
+hard 15     10      HIT       DOUBLE        10          0.0301
+hard 17     10      STAND     HIT           10          0.0301
+hard 18     10      STAND     DOUBLE         5          0.0241
+hard 19     10      STAND     DOUBLE         5          0.0241
+hard 11     10      DOUBLE    HIT           15          0.0180
+hard 10     10      HIT       DOUBLE        14          0.0168
+hard 16     10      HIT       DOUBLE         3          0.0144
+hard 12     10      HIT       DOUBLE        10          0.0120
+pair 10/10  5       STAND     DOUBLE         5          0.0120
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - gemini-2-5-flash-no-thinking</button>
+                <div class="content">
+                    <pre>category    dealer  baseline  agent  mistakes  weighted_share
+pair 10/10  10      STAND     SPLIT         5          0.0741
+hard 17     10      STAND     HIT          10          0.0463
+hard 18     10      STAND     HIT           5          0.0370
+hard 11     10      DOUBLE    HIT          20          0.0370
+pair 10/10  2       STAND     SPLIT         5          0.0185
+hard 13     2       STAND     HIT          20          0.0162
+hard 13     3       STAND     HIT          20          0.0162
+hard 13     4       STAND     HIT          20          0.0162
+hard 14     2       STAND     HIT          15          0.0139
+hard 14     3       STAND     HIT          15          0.0139
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - gemini-2-5-flash-thinking</button>
+                <div class="content">
+                    <pre>category  dealer  baseline  agent   mistakes  weighted_share
+hard 10   10      HIT       DOUBLE        12          0.3189
+pair 5/5  10      HIT       DOUBLE         5          0.0664
+hard 15   2       STAND     HIT            9          0.0598
+pair 2/2  10      HIT       SPLIT          3          0.0399
+soft 14   4       HIT       DOUBLE         5          0.0332
+soft 16   4       HIT       DOUBLE         5          0.0332
+soft 17   3       HIT       DOUBLE         5          0.0332
+soft 17   4       HIT       DOUBLE         5          0.0332
+soft 19   6       DOUBLE    STAND          5          0.0332
+hard 10   A       HIT       DOUBLE         5          0.0332
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - claude-sonnet-4-20250514-no-thinking</button>
+                <div class="content">
+                    <pre>category  dealer  baseline  agent   mistakes  weighted_share
+hard 11   10      DOUBLE    HIT           20          0.0687
+hard 12   5       STAND     DOUBLE        20          0.0301
+hard 13   2       STAND     HIT           20          0.0301
+hard 13   3       STAND     HIT           20          0.0301
+hard 13   5       STAND     DOUBLE        20          0.0301
+hard 13   6       STAND     DOUBLE        20          0.0301
+hard 14   2       STAND     HIT           15          0.0258
+hard 14   3       STAND     HIT           15          0.0258
+hard 14   5       STAND     DOUBLE        15          0.0258
+hard 15   5       STAND     DOUBLE        15          0.0258
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - claude-sonnet-4-20250514-thinking</button>
+                <div class="content">
+                    <pre>category  dealer  baseline  agent   mistakes  weighted_share
+hard 11   A       DOUBLE    HIT            8          0.0630
+hard 10   10      HIT       DOUBLE         2          0.0630
+soft 14   3       HIT       DOUBLE         5          0.0394
+soft 17   3       HIT       DOUBLE         5          0.0394
+hard 8    5       HIT       DOUBLE         5          0.0394
+soft 19   6       DOUBLE    STAND          5          0.0394
+hard 8    6       HIT       DOUBLE         5          0.0394
+hard 13   2       STAND     HIT            2          0.0394
+hard 9    2       HIT       DOUBLE         4          0.0315
+hard 12   2       HIT       STAND          4          0.0315
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Top Strategic Leaks - gemini-2-5-pro</button>
+                <div class="content">
+                    <pre>category  dealer  baseline  agent   mistakes  weighted_share
+hard 15   2       STAND     HIT            4          0.1575
+hard 14   2       STAND     HIT            2          0.1260
+soft 17   3       HIT       DOUBLE         5          0.0787
+soft 15   4       HIT       DOUBLE         5          0.0787
+soft 16   4       HIT       DOUBLE         5          0.0787
+soft 17   4       HIT       DOUBLE         5          0.0787
+hard 13   2       STAND     HIT            4          0.0630
+hard 18   9       STAND     HIT            1          0.0630
+soft 19   5       STAND     DOUBLE         3          0.0472
+soft 18   2       STAND     DOUBLE         2          0.0315
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - basic</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1717  0      0       0      1717       0.000           
+STAND           0     1820   0       0      1820       0.000           
+DOUBLE          0     0      574     0      574        0.000           
+SPLIT           0     0      0       257    257        0.000           
+total           1717  1820   574     257    4368       0.000           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - gemma3-12b-it-qat</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             2011  20     0       122    2153       0.066           
+STAND           3497  91     0       20     3608       0.975           
+DOUBLE          576   0      0       40     616        1.000           
+SPLIT           5     0      0       252    257        0.019           
+total           6089  111    0       434    6634       0.645           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - openrouter-sonoma-dusk-alpha</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1107  205    406     122    1840       0.398           
+STAND           713   1033   166     18     1930       0.465           
+DOUBLE          266   44     267     40     617        0.567           
+SPLIT           0     5      0       252    257        0.019           
+total           2086  1287   839     432    4644       0.427           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - openrouter-sonoma-sky-alpha</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT  STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             0    1188   0       0      1188       1.000           
+STAND           0    732    0       0      732        0.000           
+DOUBLE          0    491    0       0      491        1.000           
+SPLIT           0    258    0       0      258        1.000           
+total           0    2669   0       0      2669       0.726           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - gemini-2-5-flash-lite</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT  STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             529  69     884     117    1599       0.669           
+STAND           331  177    889     15     1412       0.875           
+DOUBLE          81   0      528     0      609        0.133           
+SPLIT           0    0      0       257    257        0.000           
+total           941  246    2301    389    3877       0.615           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - gemini-2-5-flash-no-thinking</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1851  52     62      122    2087       0.113           
+STAND           2084  310    444     25     2863       0.892           
+DOUBLE          398   12     170     38     618        0.725           
+SPLIT           0     0      0       257    257        0.000           
+total           4333  374    676     442    5825       0.556           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - gemini-2-5-flash-thinking</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1585  49     62      20     1716       0.076           
+STAND           113   1681   0       0      1794       0.063           
+DOUBLE          7     7      564     0      578        0.024           
+SPLIT           4     0      0       253    257        0.016           
+total           1709  1737   626     273    4345       0.060           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - claude-sonnet-4-20250514-no-thinking</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1443  125    273     117    1958       0.263           
+STAND           706   1204   237     5      2152       0.441           
+DOUBLE          287   5      280     40     612        0.542           
+SPLIT           0     0      0       257    257        0.000           
+total           2436  1334   790     419    4979       0.361           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - claude-sonnet-4-20250514-thinking</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1591  53     63      6      1713       0.071           
+STAND           15    1718   1       4      1738       0.012           
+DOUBLE          15    6      552     0      573        0.037           
+SPLIT           6     0      4       247    257        0.039           
+total           1627  1777   620     257    4281       0.040           
+</pre>
+                </div>
+                
+
+                <button class="collapsible" onclick="toggleContent(this)">▶ Confusion Matrix - gemini-2-5-pro</button>
+                <div class="content">
+                    <pre>baseline\agent  HIT   STAND  DOUBLE  SPLIT  row_total  row_mistake_rate
+HIT             1687  8      24      2      1721       0.020           
+STAND           40    1754   11      1      1806       0.029           
+DOUBLE          2     1      571     0      574        0.005           
+SPLIT           0     1      0       256    257        0.004           
+total           1729  1764   606     259    4358       0.021           
+</pre>
+                </div>
+                
+    </div>
+</body>
+</html>

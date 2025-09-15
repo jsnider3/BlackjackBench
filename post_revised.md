@@ -7,7 +7,7 @@ categories: update ai benchmark blackjack
 
 ## TL;DR
 - I built BlackjackBench: a Blackjack benchmark covering all 550 initial hands. It can be easily rerun with everything logged and random seeds controllable.
-- Key metric is difference in expected value (ΔEV) compared to the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.01%, 4.0% mistakes) and GPT‑5 Nano (medium) (ΔEV ≈ −0.06%, 5.0%). Notably, Gemini 2.5 Flash improves dramatically from ΔEV −66.6% (no thinking) to −0.37% with thinking[^2].
+- Key metric is difference in expected value (ΔEV) compared to the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.06%, 4.0% mistakes) and GPT‑5 Nano (medium) (ΔEV ≈ −0.12%, 5.0%). Notably, Gemini 2.5 Flash improves dramatically from ΔEV −66.6% (no thinking) to −0.43% with thinking[^2].
 - "Perfect" computer play is straightforward; the interesting question is how LLMs compare under fair prompting and strict legality, and what model progress implies for general problems.
 - Many non-thinking models perform poorly (making mistakes on 40–80% of hands), but thinking-enabled models can match basic strategy accuracy.
 
@@ -77,27 +77,27 @@ The results reveal dramatic performance differences between models, with **think
 | Model[^3]                           | ΔEV vs Baseline | Mistake Rate | Decisions |
 | :---                                | :-------------: | :----------: | :-------: |
 | **Basic Strategy**                  | **+0.0%**       | **0.0%**     | —         |
-| **GPT‑5 (thinking, medium)**        | **+0.06%**      | **1.2%**     | 4,341     |
-| Claude Sonnet 4 (thinking)         | -0.01%          | 4.0%         | 4,281     |
-| GPT‑5 Nano (thinking, medium)      | -0.06%          | 5.0%         | 4,380     |
-| Gemini 2.5 Flash (thinking)[^2]    | -0.37%          | 6.0%         | 4,345     |
-| Sonoma Sky Alpha (thinking)        | -0.94%          | 8.0%         | 4,323     |
-| Gemini 2.5 Pro (thinking)         | -1.4%           | 2.1%         | 4,358     |
-| **Claude Opus 4.1 (no thinking)**  | **-1.8%**       | **16%**      | 4,422     |
-| Claude Sonnet 4 (no thinking)     | -10%            | 36%          | 4,979     |
-| GPT-5 (no thinking)                | -21%            | 38%          | 4,275     |
-| Sonoma Dusk Alpha                  | -23%            | 43%          | 4,804     |
-| Gemini 2.5 Flash Lite             | -45%            | 62%          | 3,877     |
-| GPT‑5 Nano (no thinking)           | -51%            | 55%          | 5,869     |
+| **GPT‑5 (thinking, medium)**        | **+0.01%**      | **1.2%**     | 4,341     |
+| Claude Sonnet 4 (thinking)         | -0.06%          | 4.0%         | 4,281     |
+| GPT‑5 Nano (thinking, medium)      | -0.12%          | 5.0%         | 4,380     |
+| Gemini 2.5 Flash (thinking)[^2]    | -0.43%          | 6.0%         | 4,345     |
+| Sonoma Sky Alpha (thinking)        | -0.99%          | 8.0%         | 4,323     |
+| Gemini 2.5 Pro (thinking)         | -1.46%          | 2.1%         | 4,358     |
+| **Claude Opus 4.1 (no thinking)**  | **-1.9%**       | **16%**      | 4,422     |
+| Claude Sonnet 4 (no thinking)     | -10.49%         | 36%          | 4,979     |
+| GPT-5 (no thinking)                | -20.64%         | 38%          | 4,275     |
+| Sonoma Dusk Alpha                  | -23.17%         | 43%          | 4,804     |
+| Gemini 2.5 Flash Lite             | -44.55%         | 62%          | 3,877     |
+| GPT‑5 Nano (no thinking)           | -51.18%         | 55%          | 5,869     |
 | Gemini 2.5 Flash (no thinking)    | -66.6%          | 56%          | 5,825     |
-| Gemma3 12B‑IT QAT                  | -87%            | 65%          | 6,794     |
+| Gemma3 12B‑IT QAT                  | -87.07%         | 65%          | 6,794     |
 
 Note: ΔEV values are computed relative to the same seeded basic‑strategy baseline on the exact same 2,750 hands.
 
 Key takeaways:
 - Six thinking‑enabled models (Claude Sonnet 4, GPT‑5, GPT‑5 Nano, Gemini 2.5 Pro, Gemini 2.5 Flash, Sonoma Sky Alpha) are at basic‑strategy parity (within 95% CI)[^4]; non‑thinking variants trail by ~2–60+ points ΔEV.
 - The gap between thinking and non‑thinking versions of the same model can be massive (e.g., Gemini 2.5 Flash improves by ~66 points with thinking).
-- Best non‑thinking baseline here is Claude Opus 4.1 (−1.8% ΔEV, 16% mistakes).
+- Best non‑thinking baseline here is Claude Opus 4.1 (−1.9% ΔEV, 16% mistakes).
 
 ### The Capability Threshold Moment
 
@@ -110,12 +110,12 @@ The evidence is striking: six different models achieve near-perfect performance 
 The most striking finding is how thinking transforms the same underlying models. In our results, GPT‑5 (medium reasoning) edges out others by EV with the lowest mistake rate among thinking models, while Claude Sonnet 4 and Gemini 2.5 Flash also deliver near‑basic strategy performance:
 
 #### Claude Sonnet 4: Near‑Perfect Performance
-- With Thinking: ΔEV −0.01%, 4.0% mistake rate (4,281 decisions) — matches baseline within noise
-- Without Thinking: ΔEV −10%, 36% mistake rate (4,979 decisions)  
+- With Thinking: ΔEV −0.06%, 4.0% mistake rate (4,281 decisions) — matches baseline within noise
+- Without Thinking: ΔEV −10.49%, 36% mistake rate (4,979 decisions)  
 - Net Impact: ~+10 percentage point ΔEV improvement, 32.1 point mistake reduction
 
 #### Gemini 2.5 Flash: Dramatic Transformation  
-- With Thinking: ΔEV −0.37%, 6.0% mistake rate (4,345 decisions)
+- With Thinking: ΔEV −0.43%, 6.0% mistake rate (4,345 decisions)
 - Without Thinking: ΔEV −66.6%, 56% mistake rate (5,825 decisions)
 - Net Impact: +66.2 percentage point EV gain
 
@@ -249,7 +249,7 @@ Taken together, scaling, knowledge‑execution gaps, and the complexity hierarch
 
 ## Conclusion: The Thinking Revolution
 
-BlackjackBench reveals a fundamental shift in how AI models perform at capability thresholds. The dramatic transformation between thinking and non‑thinking modes—exemplified by Gemini 2.5 Flash's leap from −66.6% to −0.37% ΔEV—demonstrates that explicit reasoning doesn't just improve performance, it flips outcomes entirely.
+BlackjackBench reveals a fundamental shift in how AI models perform at capability thresholds. The dramatic transformation between thinking and non‑thinking modes—exemplified by Gemini 2.5 Flash's leap from −66.6% to −0.43% ΔEV—demonstrates that explicit reasoning doesn't just improve performance, it flips outcomes entirely.
 
 ### What We Learned About Blackjack Performance
 
@@ -638,10 +638,10 @@ Top Weighted Mistakes (First Decision)
 Use these commands and files to reproduce the tables and figures referenced in this post.
 
 - Per‑model confusion matrices (policy‑grid):
-  - `python tools/summarize_confusion.py --track policy-grid baselines/20250911_policy-grid_llm_gpt-5-med-thinking.jsonl --csv figures/gpt5_confusion.csv`
-  - `python tools/summarize_confusion.py --track policy-grid baselines/20250910_policy-grid_llm_claude-sonnet-4-20250514-thinking.jsonl --csv figures/claude_confusion.csv`
-  - `python tools/summarize_confusion.py --track policy-grid baselines/20250909_policy-grid_llm_gemini-2-5-flash-thinking.jsonl --csv figures/gemini_flash_confusion.csv`
-  - `python tools/summarize_confusion.py --track policy-grid baselines/20250911_policy-grid_llm_gpt-5-nano-med-thinking.jsonl --csv figures/gpt5_nano_confusion.csv`
+  - `python tools/summarize_confusion.py --track policy-grid --recompute-baseline baselines/20250911_policy-grid_llm_gpt-5-med-thinking.jsonl --csv figures/gpt5_confusion.csv`
+  - `python tools/summarize_confusion.py --track policy-grid --recompute-baseline baselines/20250910_policy-grid_llm_claude-sonnet-4-20250514-thinking.jsonl --csv figures/claude_confusion.csv`
+  - `python tools/summarize_confusion.py --track policy-grid --recompute-baseline baselines/20250909_policy-grid_llm_gemini-2-5-flash-thinking.jsonl --csv figures/gemini_flash_confusion.csv`
+  - `python tools/summarize_confusion.py --track policy-grid --recompute-baseline baselines/20250911_policy-grid_llm_gpt-5-nano-med-thinking.jsonl --csv figures/gpt5_nano_confusion.csv`
 
 - Top weighted leaks (decision_idx==0 only):
   - `python tools/top_leaks.py baselines/20250911_policy-grid_llm_gpt-5-med-thinking.jsonl --top 15`

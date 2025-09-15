@@ -45,10 +45,17 @@ class BasicStrategyAgent:
         up = self._dealer_up(obs)
         total = obs.player.total
         can_double = obs.player.can_double
-        # Chart for soft totals (A,2=13 ... A,9=20)
-        # H17 DAS approximate
-        if total <= 17:  # A,2 / A,3
+        # Chart for soft totals (A,2=13 ... A,9=20); 6D H17 DAS
+        if total in (13, 14):  # A,2 / A,3
             if up in (5, 6) and can_double:
+                return Action.DOUBLE
+            return Action.HIT
+        if total in (15, 16):  # A,4 / A,5
+            if up in (4, 5, 6) and can_double:
+                return Action.DOUBLE
+            return Action.HIT
+        if total == 17:  # A,6
+            if up in (3, 4, 5, 6) and can_double:
                 return Action.DOUBLE
             return Action.HIT
         if total == 18:  # A,7
@@ -63,7 +70,7 @@ class BasicStrategyAgent:
             if up == 6 and can_double:
                 return Action.DOUBLE
             return Action.STAND
-        # A,9 or better
+        # A,9 or better (20+): stand
         return Action.STAND
 
     def _hard_total_decision(self, obs: Observation) -> Action:
