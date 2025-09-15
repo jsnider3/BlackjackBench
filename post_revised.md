@@ -86,16 +86,16 @@ The results reveal dramatic performance differences between models, with **think
 | **Claude Opus 4.1 (no thinking)**  | **-1.9%**       | **16%**      | 4,422     |
 | Claude Sonnet 4 (no thinking)     | -10.49%         | 36%          | 4,979     |
 | GPT-5 (no thinking)                | -20.64%         | 38%          | 4,275     |
-| Sonoma Dusk Alpha                  | -23.17%         | 43%          | 4,804     |
+| Sonoma Dusk Alpha                  | -23.17%         | 43%          | 4,644     |
 | Gemini 2.5 Flash Lite             | -44.55%         | 62%          | 3,877     |
 | GPT‑5 Nano (no thinking)           | -51.18%         | 55%          | 5,869     |
 | Gemini 2.5 Flash (no thinking)    | -66.6%          | 56%          | 5,825     |
-| Gemma3 12B‑IT QAT                  | -87.07%         | 65%          | 6,794     |
+| Gemma3 12B‑IT QAT                  | -87.07%         | 65%          | 6,634     |
 
 Note: ΔEV values are computed relative to the same seeded basic‑strategy baseline on the exact same 2,750 hands.
 
 Key takeaways:
-- Six thinking‑enabled models (Claude Sonnet 4, GPT‑5, GPT‑5 Nano, Gemini 2.5 Pro, Gemini 2.5 Flash, Sonoma Sky Alpha) are at basic‑strategy parity (within 95% CI)[^4]; non‑thinking variants trail by ~2–60+ points ΔEV.
+- Six thinking‑enabled models (Claude Sonnet 4, GPT‑5, GPT‑5 Nano, Gemini 2.5 Pro, Gemini 2.5 Flash, Sonoma Sky Alpha) are at basic‑strategy parity (within 95% CI)[^4]; non‑thinking variants trail by ~2–85+ points ΔEV.
 - The gap between thinking and non‑thinking versions of the same model can be massive (e.g., Gemini 2.5 Flash improves by ~66 points with thinking).
 - Best non‑thinking baseline here is Claude Opus 4.1 (−1.9% ΔEV, 16% mistakes).
 
