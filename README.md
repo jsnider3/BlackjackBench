@@ -1,4 +1,4 @@
-BlackJackBench — A Blackjack-Based Benchmark for AI Agents
+BlackjackBench — A Blackjack-Based Benchmark for AI Agents
 
 Overview
 - Purpose: Evaluate decision-making, reasoning, and planning of AI agents in a constrained, partially observable environment with crisp ground truth and outcome metrics.

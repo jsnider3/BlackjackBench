@@ -289,7 +289,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="blackjack_bench", description="BlackJackBench CLI")
+    parser = argparse.ArgumentParser(prog="blackjack_bench", description="BlackjackBench CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_run = sub.add_parser("run", help="Run a benchmark track")

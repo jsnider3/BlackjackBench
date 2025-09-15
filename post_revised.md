@@ -1,14 +1,14 @@
 ---
 layout: post
-title: "BlackJackBench and The Thinking Revolution"
+title: "BlackjackBench and The Thinking Revolution"
 date: 2025-09-15 09:00:00 -0400
 categories: update ai benchmark blackjack
 ---
 
 ## TL;DR
-- I built BlackJackBench: a Blackjack benchmark covering all 550 initial hands. It can be easily rerun with everything logged and random seeds controllable.
-- Key metric is difference in expected value (ΔEV) compared to the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.01%, 4.0% mistakes), GPT‑5 Nano (medium) (ΔEV ≈ −0.06%, 5.0%), and Gemini 2.5 Flash improves from ΔEV −66.6% (no thinking) to −0.37% with thinking[^2].
-- "Perfect" computer play is straightforward; the interesting question is how LLMs compare under fair prompting and strict legality and what model progress implies for general problems.
+- I built BlackjackBench: a Blackjack benchmark covering all 550 initial hands. It can be easily rerun with everything logged and random seeds controllable.
+- Key metric is difference in expected value (ΔEV) compared to the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.01%, 4.0% mistakes) and GPT‑5 Nano (medium) (ΔEV ≈ −0.06%, 5.0%). Notably, Gemini 2.5 Flash improves dramatically from ΔEV −66.6% (no thinking) to −0.37% with thinking[^2].
+- "Perfect" computer play is straightforward; the interesting question is how LLMs compare under fair prompting and strict legality, and what model progress implies for general problems.
 - Many non-thinking models perform poorly (making mistakes on 40–80% of hands), but thinking-enabled models can match basic strategy accuracy.
 
 ## Why Blackjack
@@ -89,7 +89,7 @@ The results reveal dramatic performance differences between models, with **think
 | Sonoma Dusk Alpha                  | -23%            | 43%          | 4,804     |
 | Gemini 2.5 Flash Lite             | -45%            | 62%          | 3,877     |
 | GPT‑5 Nano (no thinking)           | -51%            | 55%          | 5,869     |
-| Gemini 2.5 Flash (no thinking)    | -67%            | 56%          | 5,825     |
+| Gemini 2.5 Flash (no thinking)    | -66.6%          | 56%          | 5,825     |
 | Gemma3 12B‑IT QAT                  | -87%            | 65%          | 6,794     |
 
 Note: ΔEV values are computed relative to the same seeded basic‑strategy baseline on the exact same 2,750 hands.
@@ -101,7 +101,7 @@ Key takeaways:
 
 ### The Capability Threshold Moment
 
-**These results capture a fascinating moment in AI development.** Blackjack basic strategy sits at a capability threshold where today's models need thinking to reach parity, but won't in the near future. Test‑time compute acts as a temporary bridge—what requires explicit reasoning today will become implicit knowledge tomorrow[^8].
+**These results capture a fascinating moment in AI development.** Blackjack basic strategy sits at a capability threshold where today's models need thinking to reach parity, but likely won't require it in the near future. Test‑time compute acts as a temporary bridge—what requires explicit reasoning today will become implicit knowledge tomorrow[^8].
 
 The evidence is striking: six different models achieve near-perfect performance with thinking enabled, while their identical non-thinking counterparts fail dramatically. Gemini 2.5 Flash's 66-point EV swing exemplifies this threshold effect—the same model architecture performs either competently or catastrophically depending solely on whether explicit reasoning is enabled. This suggests we're witnessing a capability boundary where test-time compute multiplies performance precisely because the underlying task difficulty sits at the current frontier of implicit model knowledge.
 
@@ -129,7 +129,7 @@ This underscores that explicit test‑time reasoning, not just stored knowledge,
   - soft 15–17 vs dealer 3–4: over‑DOUBLING where HIT is correct
   - occasional hard 10 vs 10 over‑DOUBLE
 
-Confusion summary: STAND→HIT dominates the errors (row mistake rate ~7.5%), while DOUBLE and SPLIT rows are very accurate (≤2%). The top‑weighted leaks concentrate in stiff‑hand stands vs weak dealer upcards.
+Confusion summary: STAND→HIT dominates the errors (row mistake rate ~7.5%), while DOUBLE and SPLIT rows are very accurate (≤2%). The top‑weighted leaks concentrate in failing to stand with stiff hands against weak dealer upcards.
 
 #### What Thinking Fixes
 - **Perfect Fundamental Decisions**: A/A and 8/8 splits, standing on 19-21
@@ -184,11 +184,11 @@ This pattern suggests GPT‑5 Nano has memorized some blackjack “rules” (lik
 *Gemma3 confusion matrix showing systematic "hit everything" bias*
 
 Confusion Matrix Analysis:
-- **Should STAND → Actually HIT**: 3,497 errors (98% of all STAND situations)
-- **Should DOUBLE → Actually HIT**: 576 errors (100% of all DOUBLE situations) 
+- **Should STAND → Actually HIT**: 3,497 errors (97% of all STAND situations)
+- **Should DOUBLE → Actually HIT**: 576 errors (93.5% of all DOUBLE situations) 
 - **Never doubles down**: 0 correct doubles out of 616 opportunities
 
-**Pattern**: Gemma3 has learned "when in doubt, hit" as a default strategy. For blackjack, this is a very poor strategy since standing is frequently the best move and usually not a terrible one. This represents a complete strategic failure where the model defaults to the most aggressive action regardless of situation.
+**Pattern**: Gemma3 has learned "when in doubt, hit" as a default strategy. For blackjack, this is a very poor strategy since standing is frequently the optimal move and generally carries lower risk. This represents a complete strategic failure where the model defaults to the most aggressive action regardless of situation.
 
 ### Non‑Thinking vs Thinking Error Patterns
 
@@ -216,11 +216,11 @@ Two lenses help explain the performance gaps we observe: (1) where models sit on
 
 ### Scaling Perspective
 
-Basic blackjack sits near a moving capability threshold. Today, general‑purpose models reach basic‑strategy parity with test‑time compute (thinking) but not without it. A little in the past they struggled even with reasoning. A little in the future, stronger models will match basic strategy even without explicit thinking. Test‑time compute acts as a capability multiplier near thresholds and is most valuable in harder or shifting situations[^8].
+Basic blackjack sits near a moving capability threshold. Today, general‑purpose models reach basic‑strategy parity with test‑time compute (thinking) but not without it. In the recent past, they struggled even with reasoning. A little in the future, stronger models will match basic strategy even without explicit thinking. Test‑time compute acts as a capability multiplier near thresholds and is most valuable in harder or shifting situations[^8].
 
 ### Knowledge vs. Execution
 
-Before running benchmarks, we surveyed models about their blackjack knowledge (see [model_thoughts/](https://github.com/jsnider3/BlackjackBench/tree/main/model_thoughts)). Most stated the right rules and core principles (split A/A and 8/8, never split 10/10, stand on hard 17+), with the greatest variation in doubles. Gemma is the only one with clear errors, where it suggests doubling down on soft 19-21.
+Before running benchmarks, we surveyed models about their blackjack knowledge (see [model_thoughts/](https://github.com/jsnider3/BlackjackBench/tree/main/model_thoughts)). Most stated the right rules and core principles (split A/A and 8/8, never split 10/10, stand on hard 17+), with the greatest variation in doubles. Gemma is the only one with clear errors, as it suggests doubling down on soft 19-21.
 
 **Key finding: knowledge alone isn’t sufficient.** Even models with solid theoretical understanding failed dramatically without thinking enabled. This contrasts with skilled human players, who execute basic strategy automatically because they’ve memorized it.
 
@@ -249,7 +249,7 @@ Taken together, scaling, knowledge‑execution gaps, and the complexity hierarch
 
 ## Conclusion: The Thinking Revolution
 
-BlackJackBench reveals a fundamental shift in how AI models perform at capability thresholds. The dramatic transformation between thinking and non‑thinking modes—exemplified by Gemini 2.5 Flash's leap from −66.6% to −0.37% ΔEV—demonstrates that explicit reasoning doesn't just improve performance, it flips outcomes entirely.
+BlackjackBench reveals a fundamental shift in how AI models perform at capability thresholds. The dramatic transformation between thinking and non‑thinking modes—exemplified by Gemini 2.5 Flash's leap from −66.6% to −0.37% ΔEV—demonstrates that explicit reasoning doesn't just improve performance, it flips outcomes entirely.
 
 ### What We Learned About Blackjack Performance
 
@@ -295,7 +295,7 @@ This work opens several promising avenues for further investigation:
 
 [^2]: "Thinking" refers to Chain-of-Thought prompting where models generate intermediate reasoning steps before outputting their final decision. For OpenAI models, this uses the reasoning effort parameter; for Anthropic models, this enables the thinking budget; for Google models, this uses reasoning summaries. Non-thinking models respond directly without explicit step-by-step reasoning. Foundational work on CoT and test-time reasoning includes: Wei et al., 2022 ("Chain-of-Thought Prompting Elicits Reasoning"; arXiv:2201.11903), Kojima et al., 2022 ("Large Language Models are Zero-Shot Reasoners"; arXiv:2205.11916), and Wang et al., 2022 ("Self-Consistency Improves Chain of Thought Reasoning in Large Language Models"; arXiv:2203.11171).
 
-[^3]: **Model specifications**: Exact model identifiers used: Claude Sonnet 4 (`claude-sonnet-4-20250514`), Claude Opus 4.1 (`claude-opus-4-1-20250805`), GPT‑5 (`gpt-5`), Gemini 2.5 Flash (`gemini-2.5-flash`), Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`), Gemini 2.5 Pro (`gemini-2.5-pro`). Sonoma Sky Alpha and Sonoma Dusk Alpha are stealth models hosted on OpenRouter which are strongly suspected to be Grok 4 variants. See, for example: https://manifold.markets/iwakura/who-is-behind-the-sonoma-cloaked-mo
+[^3]: **Model specifications**: Exact model identifiers used: Claude Sonnet 4 (`claude-sonnet-4-20250514`), Claude Opus 4.1 (`claude-opus-4-1-20250805`), GPT‑5 (`gpt-5`), Gemini 2.5 Flash (`gemini-2.5-flash`), Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`), Gemini 2.5 Pro (`gemini-2.5-pro`). Sonoma Sky Alpha and Sonoma Dusk Alpha are stealth models hosted on OpenRouter that are strongly suspected to be Grok 4 variants. See, for example: https://manifold.markets/iwakura/who-is-behind-the-sonoma-cloaked-mo
 
 [^4]: **Statistical Confidence**: Wide 95% confidence intervals (e.g., [-4.2%, +5.8%]) reflect the inherent variance in blackjack outcomes. Results are based on 5 repetitions of the 550-cell policy grid (2,750 total hands per model). Significantly more repetitions would be required to achieve tighter confidence bounds for distinguishing top-tier models.
 

@@ -1,12 +1,12 @@
 ---
 layout: post
-title: "BlackJackBench: Benchmarking LLMs at Blackjack"
+title: "BlackjackBench: Benchmarking LLMs at Blackjack"
 date: 2025-09-15 10:00:00
 categories: update ai benchmark blackjack
 ---
 
 ## TL;DR
-- I built BlackJackBench: a reproducible Blackjack benchmark with a simulator, baselines, and a policy‑grid that covers all 550 starting positions.
+- I built BlackjackBench: a reproducible Blackjack benchmark with a simulator, baselines, and a policy‑grid that covers all 550 starting positions.
 - Key metric is ΔEV vs the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.01%, 4.0% mistakes), GPT‑5 Nano (medium) (ΔEV ≈ −0.06%, 5.0%), and Gemini 2.5 Flash improves from ΔEV −66.6% (no thinking) to −0.37% with thinking[^2].
 - "Perfect" computer play is straightforward; the interesting question is how LLMs compare under fair prompting and strict legality.
 - Many models perform poorly (40-80% mistake rates), but thinking-enabled models can match basic strategy accuracy. Everything is seeded, logged, and easy to rerun.
@@ -370,12 +370,12 @@ This suggests that while thinking-enabled LLMs have "solved" basic blackjack, th
 
 ## Conclusion: The Thinking Revolution
 
-**BlackJackBench reveals a fundamental breakthrough**: thinking capability doesn't just improve LLM performance—it transforms models from systematic losers into near-optimal players. The 66-point EV swing between thinking and non-thinking versions of Gemini 2.5 Flash represents the difference between bankruptcy and profitability.
+**BlackjackBench reveals a fundamental breakthrough**: thinking capability doesn't just improve LLM performance—it transforms models from systematic losers into near-optimal players. The 66-point EV swing between thinking and non-thinking versions of Gemini 2.5 Flash represents the difference between bankruptcy and profitability.
 
 **Key Takeaways**:
 - **Thinking is transformative**: The same model architecture produces radically different outcomes based solely on reasoning capability
 - **Knowledge ≠ Performance**: Models with solid theoretical understanding still fail without step-by-step reasoning
-- **Systematic evaluation matters**: BlackJackBench's policy-grid approach reveals performance patterns invisible in random testing
+- **Systematic evaluation matters**: BlackjackBench's policy-grid approach reveals performance patterns invisible in random testing
 - **Benchmark ceiling effect**: Basic strategy blackjack may not be challenging enough to distinguish top thinking-enabled models, which all achieve near-optimal performance
 - **Reasoning tax matters**: When a cheap, specialized solution exists (e.g., lookup tables), explicit step-by-step reasoning adds cost without improving EV; its value shows in novel or shifting domains.
 - **Mistake severity > counts**: Evaluate the cost of errors, not just their frequency—few catastrophic mistakes dominate many small ones.

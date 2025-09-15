@@ -1,4 +1,4 @@
-# Codex Thoughts — BlackJackBench (internal notes)
+# Codex Thoughts — BlackjackBench (internal notes)
 
 This is a scratchpad for roadmap, technical debts, and ideas to polish the benchmark and make big-model runs turnkey. You don’t need to read this unless you’re curious.
 
