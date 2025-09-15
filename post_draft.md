@@ -1,8 +1,13 @@
-# BlackJackBench: Benchmarking LLMs at Blackjack
+---
+layout: post
+title: "BlackJackBench: Benchmarking LLMs at Blackjack"
+date: 2025-09-15 10:00:00
+categories: update ai benchmark blackjack
+---
 
 ## TL;DR
 - I built BlackJackBench: a reproducible Blackjack benchmark with a simulator, baselines, and a policy‑grid that covers all 550 starting positions.
-- **Key Finding**: Thinking capability transforms models from significant losers to winners. Claude Sonnet 4 and GPT‑5 Nano (medium) achieve near‑basic strategy performance (+2.6% EV¹, 4.0% mistakes; +2.5% EV, 5.0% mistakes), and Gemini 2.5 Flash goes from -64% EV (no thinking) to +2.2% EV with thinking².
+- Key metric is ΔEV vs the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.01%, 4.0% mistakes), GPT‑5 Nano (medium) (ΔEV ≈ −0.06%, 5.0%), and Gemini 2.5 Flash improves from ΔEV −66.6% (no thinking) to −0.37% with thinking[^2].
 - "Perfect" computer play is straightforward; the interesting question is how LLMs compare under fair prompting and strict legality.
 - Many models perform poorly (40-80% mistake rates), but thinking-enabled models can match basic strategy accuracy. Everything is seeded, logged, and easy to rerun.
 
@@ -19,7 +24,7 @@
 - Metrics:
   - EV/hand: net units per hand.
   - ev_weighted: natural‑frequency average over the grid.
-  - mistake_rate: fraction of decisions that differ from a fixed 6D H17 DAS basic strategy.
+  - mistake_rate: fraction of decisions that differ from a fixed six-deck, dealer hits soft 17 (H17), double after split (DAS) basic strategy.
 - Reproducibility: All runs are seeded; every decision and final outcome is logged as JSONL for replay/audit.
 
 ## Methodology: Key Concepts
@@ -38,47 +43,47 @@ Thus, common states (like tens and dealer tens/Aces) receive higher weight than 
 ## LLM Integration (Fair and Simple)
 - Thinking: Enabling step‑by‑step reasoning (Chain‑of‑Thought‑style) so the model generates intermediate reasoning before returning a one‑word action. We run with “none” or “medium/high” reasoning depending on the experiment.
 - Prompt: “rules‑lite” (cards + short rules), no totals/allowed‑actions to avoid hand‑holding.
-- Legality guard: If a model proposes an illegal action, we record the violation and substitute an intentionally bad legal fallback via a simple "BadAgent" (e.g., doubles whenever possible, splits tens). This keeps runs going and strongly penalizes non‑compliance; it was rarely triggered in thinking runs.
+- Legality guard: If a model proposes an illegal action, we record the violation and substitute an intentionally bad legal fallback via a simple "BadAgent" (e.g., doubles whenever possible, splits tens). This keeps runs going and strongly penalizes non‑compliance; it was rarely triggered in thinking runs[^5].
 
 ## Results Summary
 
 The results reveal dramatic performance differences between models, with **thinking capability being the decisive factor**.
 
-Note on reporting: We report ΔEV relative to the empirical Basic Strategy baseline for the exact, seeded 2,750 hands. In this run, Basic Strategy’s absolute EV is +2.6%¹ due to player‑favorable sampling; ΔEV makes comparisons clearer and fair across models.
+Note on reporting: We report ΔEV relative to the empirical Basic Strategy baseline for the exact, seeded 2,750 hands. In this run, Basic Strategy’s absolute EV is +2.6%[^1] due to player‑favorable sampling; ΔEV makes comparisons clearer and fair across models.
 
 | Model                           | ΔEV vs Baseline | Mistake Rate | Decisions |
 | :---                            | :-------------: | :----------: | :-------: |
 | **Basic Strategy**              | **+0.0%**       | **0.0%**     | —         |
-| **GPT‑5 (thinking, medium)**      | **+0.1%**       | **1.2%**     | 4,341     |
-| **Claude Sonnet 4 (thinking)**³  | **+0.0%**       | **4.0%**     | 4,281     |
-| **GPT‑5 Nano (thinking, medium)**| **-0.1%**       | **5.0%**     | 4,380     |
-| **Gemini 2.5 Flash (thinking)**² | **-0.4%**       | **6.0%**     | 4,345     |
-| **Gemini 2.5 Pro**³              | **-1.4%**       | **2.1%**     | 4,358     |
-| **Claude Opus 4.1 (no thinking)**| **-1.8%**       | **16.3%**    | 4,422     |
-| Claude Sonnet 4 (no thinking)   | -10.4%          | 36.1%        | 4,979     |
-| Sonoma Sky Alpha                | -15.2%          | 72.6%        | 2,669     |
-| GPT-5 (no thinking)             | -20.6%          | 38.2%        | 4,275     |
-| Sonoma Dusk Alpha               | -23.1%          | 42.7%        | 4,804     |
-| Gemini 2.5 Flash Lite           | -44.5%          | 61.5%        | 3,877     |
-| GPT‑5 Nano (no thinking)        | -51.1%          | 54.6%        | 5,869     |
-| Gemini 2.5 Flash (no thinking)  | -66.6%          | 55.6%        | 5,825     |
-| Gemma3 12B‑IT QAT               | -87.0%          | 64.5%        | 6,794     |
+| **GPT‑5 (thinking, medium)**      | **+0.06%**      | **1.2%**     | 4,341     |
+| **Claude Sonnet 4 (thinking)**[^3]  | **-0.01%**      | **4.0%**     | 4,281     |
+| **GPT‑5 Nano (thinking, medium)**| **-0.06%**      | **5.0%**     | 4,380     |
+| **Gemini 2.5 Flash (thinking)**[^2] | **-0.37%**      | **6.0%**     | 4,345     |
+| **Gemini 2.5 Pro**[^3]              | **-1.4%**       | **2.1%**     | 4,358     |
+| **Claude Opus 4.1 (no thinking)**| **-1.8%**       | **16%**      | 4,422     |
+| Claude Sonnet 4 (no thinking)   | -10%            | 36%          | 4,979     |
+| Sonoma Sky Alpha                | -15%            | 73%          | 2,669     |
+| GPT-5 (no thinking)             | -21%            | 38%          | 4,275     |
+| Sonoma Dusk Alpha               | -23%            | 43%          | 4,804     |
+| Gemini 2.5 Flash Lite           | -45%            | 62%          | 3,877     |
+| GPT‑5 Nano (no thinking)        | -51%            | 55%          | 5,869     |
+| Gemini 2.5 Flash (no thinking)  | -67%            | 56%          | 5,825     |
+| Gemma3 12B‑IT QAT               | -87%            | 65%          | 6,794     |
 
-**Key Insight**: Four thinking-enabled models (GPT‑5, Claude Sonnet 4, GPT‑5 Nano, and Gemini 2.5 Flash) achieve positive expected value and cannot be statistically distinguished from ideal basic strategy play at the 95% confidence level. The dramatic performance gap between thinking and non-thinking versions of the same models (e.g., Gemini 2.5 Flash: 66-point EV improvement) reveals that reasoning capability is the decisive factor in strategic game performance.
+**Key Insight**: Four thinking-enabled models (GPT‑5, Claude Sonnet 4, GPT‑5 Nano, and Gemini 2.5 Flash) achieve positive expected value and cannot be statistically distinguished from ideal basic strategy play at the 95% confidence level[^4]. The dramatic performance gap between thinking and non-thinking versions of the same models (e.g., Gemini 2.5 Flash: 66-point EV improvement) reveals that reasoning capability is the decisive factor in strategic game performance.
 
 ## GPT-5 Nano: A Case Study in Strategic Inconsistency
 
-GPT‑5 Nano's performance (-48.5% EV, 54.6% mistake rate) illustrates how partial knowledge without strategic coherence leads to disaster. The model demonstrates a fascinating paradox: perfect execution of some rules alongside catastrophic violations of others.
+GPT‑5 Nano's performance (-48% EV, 55% mistake rate) illustrates how partial knowledge without strategic coherence leads to disaster. The model demonstrates a fascinating paradox: perfect execution of some rules alongside catastrophic violations of others.
 
 **What GPT‑5 Nano got right:**
 - **Splitting decisions**: 0% mistake rate—perfect recognition of when to split pairs
 - **Basic hit/stand on obvious situations**: Reasonable performance on clear-cut decisions
 
 **Where it went disastrously wrong:**
-- **Splitting 10,10 vs dealer 10**: The single worst possible blackjack mistake (7% weighted impact)
+- **Splitting 10,10 vs dealer 10**: The single worst possible blackjack mistake (7.0% weighted impact)
 - **Hitting hard 17+ vs strong dealers**: Fundamental strategic violation 
-- **Doubling conservatism**: 98.9% mistake rate on doubles, missing nearly every profitable opportunity
-- **Standing inconsistency**: 72.7% mistake rate, often standing when should hit
+- **Doubling conservatism**: 99% mistake rate on doubles, missing nearly every profitable opportunity
+- **Standing inconsistency**: 73% mistake rate, often standing when should hit
 
 This pattern suggests GPT‑5 Nano has memorized some blackjack "rules" (like split A/A and 8/8) but lacks the strategic framework to apply them consistently. The result is worse than random play—systematic errors that compound losses. The model's perfect split recognition makes its other failures even more puzzling, highlighting how LLMs can exhibit highly uneven competence across related tasks.
 
@@ -94,7 +99,7 @@ Before running expensive benchmarks, I asked models about their blackjack knowle
 - **Gemini 2.5 Pro/Flash**: Technically consistent basic strategy guidance with Google Search grounding
 - **Claude Sonnet 4/Opus 4.1**: Accurate hard/soft/pairs advice with clean double heuristics  
 - **GPT-5/5 Nano**: Solid basic strategy, with GPT-5 adding surrender and Hi-Lo deviations
-- **Sonoma Sky/Dusk Alpha**: Strong community consensus that these are cloaked xAI Grok variants (Sky = smarter, Dusk = faster). See, for example, this discussion: https://manifold.markets/iwakura/who-is-behind-the-sonoma-cloaked-mo
+- **Sonoma Sky/Dusk Alpha**: Strong community consensus that these are cloaked xAI Grok variants (Sky = smarter, Dusk = faster). See, for example, this discussion[^6].
 - **Gemma**: Inconsistent rules and a critical error: "double down on soft 19-21"
 
 **The knowledge gap doesn't explain performance differences** - even models with solid theoretical understanding failed dramatically in practice without thinking enabled. This contrasts curiosly with skilled human players, who play perfect basic strategy without "thinking" about blackjack because they have it memorized before they get to a table, making the thinking requirement for LLMs all the more notable.
@@ -125,7 +130,7 @@ Our analysis of thinking tokens reveals a natural hierarchy of decision complexi
 
 **Key Insight**: The 48x difference between simplest (167 tokens) and most complex (8,191 tokens) decisions reveals that blackjack isn't uniformly difficult—it has distinct complexity tiers that even thinking-enabled models struggle with differently.
 
-## Conclusions
+## Key Findings
 
 - Ceiling effect at the top: With thinking enabled, frontier models are effectively at the basic‑strategy ceiling. They are statistically indistinguishable from the baseline on this benchmark, indicating that Blackjack basic strategy is solved for these systems. This motivates dynamic benchmarks (e.g., card counting) that require adaptation and memory rather than static decision tables.
 - System 1 vs System 2: Current LLMs often require explicit, slow “System 2” reasoning to reliably apply knowledge that human experts internalize as fast “System 1” responses. True mastery will mean executing known strategies without the computational overhead of explicit reasoning.
@@ -135,7 +140,14 @@ Our analysis of thinking tokens reveals a natural hierarchy of decision complexi
 ## Category-Specific Performance Patterns
 
 ### **Hard Hands: The Fundamental Test**
-Our analysis reveals hard hands as the primary discriminator between model tiers:
+Empirically, hard‑hand rows account for most of the remaining, high‑impact mistakes that separate thinking models. See the Appendix “Top Weighted Mistakes” tables and confusion matrices: across Claude Sonnet 4, Gemini 2.5 Flash, and GPT‑5 Nano (thinking), the largest weighted leaks cluster in hard totals (stiff 12–16 vs specific dealer upcards, and the double bands 9–11). GPT‑5 (medium) simply has very few leaks overall.
+
+Why might models keep misplaying stiff hands? Likely contributors include:
+- Steep decision boundaries: HIT↔STAND flips at 12–16 depend tightly on dealer upcard; small biases (always‑hit or always‑stand) create systematic, high‑cost errors.
+- Miscalibrated dealer strength: Under/over‑weighting 2–6 vs 7–A leads to classic errors (e.g., hard 12 vs 4; hard 15–16 vs 10).
+- Risk/variance aversion on doubles: Hard 9–11 doubles are high‑leverage; models occasionally avoid doubling (or over‑double in the wrong spots) despite large EV swings.
+
+By contrast, soft hands and pairs are more rule‑like and forgiving: soft totals can draw without busting (lower error cost), and pair rules (A/A, 8/8) are near‑deterministic. The Appendix tables reflect this—most pair and many soft rows are already near‑perfect for thinking models.
 
 **Consistent Winners** (Thinking models):
 - Hard 17-21: Near-perfect performance (0-0.04% mistake rates)
@@ -143,7 +155,7 @@ Our analysis reveals hard hands as the primary discriminator between model tiers
 - Hard 12-16 vs weak dealers: Good strategy adherence
 
 **The Breaking Point** - Hard 12-16 vs dealer 10:
-- Basic Strategy: 0% mistakes
+- Basic Strategy: 0.0% mistakes
 - Claude Sonnet 4 (thinking): 3-5% mistakes  
 - Gemini 2.5 Flash (no thinking): 41-67% mistakes
 - Gemma3: 51-77% mistakes (catastrophic over-hitting)
@@ -170,14 +182,24 @@ Most challenging category for all models:
 The most striking finding is how thinking transforms the same underlying models. In our results, GPT‑5 (medium reasoning) edges out others by EV with the lowest mistake rate among thinking models, while Claude Sonnet 4 and Gemini 2.5 Flash also deliver near‑basic strategy performance:
 
 ### Claude Sonnet 4: Near‑Perfect Performance
-- **With Thinking**: +2.6% EV, 4.0% mistake rate (4,281 decisions) - matches basic strategy exactly
-- **Without Thinking**: -7.8% EV, 36.1% mistake rate (4,979 decisions)  
-- **Net Impact**: 10.4 percentage point EV improvement, 32.1 point mistake reduction
+- With Thinking: ΔEV −0.01%, 4.0% mistake rate (4,281 decisions) — matches baseline within noise
+- Without Thinking: ΔEV −10%, 36% mistake rate (4,979 decisions)  
+- Net Impact: ~+10 percentage point ΔEV improvement, 32.1 point mistake reduction
 
 ### Gemini 2.5 Flash: Dramatic Transformation  
-- **With Thinking**: +2.2% EV, 6.0% mistake rate (4,345 decisions)
-- **Without Thinking**: -64.0% EV, 55.6% mistake rate (5,825 decisions)
-- **Net Impact**: 66.2 percentage point EV improvement
+- With Thinking: ΔEV −0.37%, 6.0% mistake rate (4,345 decisions)
+- Without Thinking: ΔEV −66.6%, 56% mistake rate (5,825 decisions)
+- Net Impact: +66.2 percentage point ΔEV improvement
+
+### GPT‑5 Nano (Medium Thinking): Near‑Basic Strategy
+- ΔEV vs baseline: −0.06%
+- Mistake rate: 5.0% over 4,380 decisions; 2,750 hands; full 550‑cell coverage
+- Confusion hotspots (first decision only):
+  - hard 13–16 vs dealer 2–3: chooses HIT instead of correct STAND
+  - soft 15–17 vs dealer 3–4: over‑DOUBLING where HIT is correct
+  - occasional hard 10 vs 10 over‑DOUBLE
+
+Confusion summary: STAND→HIT dominates the errors (row mistake rate ~7.5%), while DOUBLE and SPLIT rows are very accurate (≤2%). The top‑weighted leaks concentrate in stiff‑hand stands vs weak dealer upcards, matching the patterns in the Appendix tables.
 
 ### What Thinking Fixes (Both Models)
 - **Perfect Fundamental Decisions**: A/A and 8/8 splits, standing on 19-21
@@ -186,6 +208,7 @@ The most striking finding is how thinking transforms the same underlying models.
 
 ### Remaining Gaps (Even With Thinking)
 **Claude Sonnet 4**: Minor over-doubling on soft hands vs weak dealer cards
+
 **Gemini 2.5 Flash**: Over-doubling soft totals, under-doubling soft 19 vs 6
 
 ### Residual Leaks (Thinking Models)
@@ -199,7 +222,7 @@ The most striking finding is how thinking transforms the same underlying models.
 
 ### Anthropic Without Thinking: Best‑in‑Class Baseline
 
-Across the non‑thinking tier, Anthropic’s models are clearly the strongest. Claude Opus 4.1 (no thinking) lands at roughly ΔEV −1.8% with a 16.3% mistake rate over 4,422 decisions, and Claude Sonnet 4 (no thinking) leads the rest of the no‑thinking pack at ΔEV −10.4%. In contrast, other non‑thinking models range from −15% to −87% ΔEV with far higher mistake rates.
+Across the non‑thinking tier, Anthropic’s models are clearly the strongest. Claude Opus 4.1 (no thinking) lands at roughly ΔEV −1.8% with a 16% mistake rate over 4,422 decisions, and Claude Sonnet 4 (no thinking) leads the rest of the no‑thinking pack at ΔEV −10%. In contrast, other non‑thinking models range from −15% to −87% ΔEV with far higher mistake rates.
 
 Why might Anthropic excel without thinking? Plausible contributors include:
 - Strong instruction‑following and rule compliance out‑of‑the‑box (clean one‑word compliance, fewer illegal actions)
@@ -223,16 +246,16 @@ Each model family exhibits distinct error signatures that reveal their underlyin
 
 ### **The Gemma3 "Hit Everything" Syndrome**
 Confusion Matrix Analysis:
-- **Should STAND → Actually HIT**: 3,497 errors (97.5% of all STAND situations)
+- **Should STAND → Actually HIT**: 3,497 errors (98% of all STAND situations)
 - **Should DOUBLE → Actually HIT**: 576 errors (100% of all DOUBLE situations) 
 - **Never doubles down**: 0 correct doubles out of 616 opportunities
 
-**Pattern**: Gemma3 has learned "when in doubt, hit" as a default strategy—catastrophically wrong for blackjack where standing is often optimal.
+**Pattern**: Gemma3 has learned "when in doubt, hit" as a default strategy. For blackjack, this is a very poor strategy since standing is frequently the best move and usually not a terrible one.
 
 ### **The Sky Alpha "Always Stand" Strategy**  
-**Paradoxical Efficiency**: 72.6% mistake rate but only -12.6% EV loss
+**Paradoxical Efficiency**: 73% mistake rate but only -13% EV loss
 
-Sonoma Sky Alpha demonstrates a crucial insight about mistake severity in strategic games: error frequency doesn't always correlate with performance loss. Despite making the wrong decision 72.6% of the time—the second-highest mistake rate in our benchmark—Sky Alpha achieves better expected value than several models with significantly lower error rates.
+Sonoma Sky Alpha demonstrates a crucial insight about mistake severity in strategic games: error frequency doesn't always correlate with performance loss. Despite making the wrong decision 73% of the time—the second-highest mistake rate in our benchmark—Sky Alpha achieves better expected value than several models with significantly lower error rates.
 
 **Pattern Analysis**:
 - **Systematic refusal to hit**: 100% mistake rate on hit decisions for totals 5-11
@@ -246,28 +269,15 @@ This reveals that not all mistakes are created equal in blackjack—and likely i
 
 *Without Thinking*:
 - Chaotic error distribution across all categories  
-- 55.6% overall mistake rate
+- 56% overall mistake rate
 - Major leaks: Splits 10/10 (should stand), refuses to hit 17 vs 10
 
 *With Thinking*:  
 - Systematic errors concentrated in edge cases
 - 6.0% overall mistake rate  
-- Remaining errors: Over-doubling soft hands vs weak dealers
+- Remaining errors: Over‑doubling soft and low hard hands in a few spots (see detailed table below)
 
 **The "Imaginary Strategy Card" Effect**: Thinking models often reference non-existent "basic strategy charts" in their reasoning, yet this hallucinated consultation produces remarkably accurate decisions.
-
-## Update: GPT-5 Nano With Medium Thinking
-
-Our new policy‑grid run with GPT‑5 Nano (medium reasoning) achieves near‑basic‑strategy performance:
-
-- Weighted EV: +2.5% (95% CI: [-3.0%, +7.0%])
-- Mistake rate: 5.0% over 4,380 decisions; 2,750 hands; full 550‑cell coverage
-- Confusion hotspots (first decision only):
-  - hard 13–16 vs dealer 2–3: chooses HIT instead of correct STAND
-  - soft 15–17 vs dealer 3–4: over‑DOUBLING where HIT is correct
-  - occasional hard 10 vs 10 over‑DOUBLE
-
-Confusion matrix summary: STAND→HIT accounts for most errors (row mistake rate 7.5%), while DOUBLE and SPLIT rows remain very accurate (≤2% row mistake rate). Top‑leak weighting is dominated by stiff‑hand stands vs weak dealer upcards, indicating targeted opportunities for prompt/guard tuning.
 
 ## Failure Mode Summary
 
@@ -367,6 +377,8 @@ This suggests that while thinking-enabled LLMs have "solved" basic blackjack, th
 - **Knowledge ≠ Performance**: Models with solid theoretical understanding still fail without step-by-step reasoning
 - **Systematic evaluation matters**: BlackJackBench's policy-grid approach reveals performance patterns invisible in random testing
 - **Benchmark ceiling effect**: Basic strategy blackjack may not be challenging enough to distinguish top thinking-enabled models, which all achieve near-optimal performance
+- **Reasoning tax matters**: When a cheap, specialized solution exists (e.g., lookup tables), explicit step-by-step reasoning adds cost without improving EV; its value shows in novel or shifting domains.
+- **Mistake severity > counts**: Evaluate the cost of errors, not just their frequency—few catastrophic mistakes dominate many small ones.
 
 **The Need for Harder Challenges**: Three models (Claude Sonnet 4, Gemini 2.5 Flash, and Gemini 2.5 Pro) all achieve statistically indistinguishable performance from perfect basic strategy. This suggests that basic blackjack decision-making has become a solved problem for frontier thinking-enabled models. To truly differentiate model capabilities, more complex challenges like card counting—which requires maintaining running counts, true count conversion, and betting strategy adjustments—would provide better discrimination between reasoning systems.
 
@@ -376,13 +388,20 @@ You can solve Blackjack "perfectly" with a lookup table, but the interesting que
 
 ---
 
-## Detailed Error Analysis
+<p class="appendix-skip">Prefer to skip? <a href="#after-appendix">Jump past the appendix</a>.</p>
+<details class="spoiler" id="appendix" markdown="1">
+<summary>Show Appendix: Detailed Error Analysis</summary>
+
+## Appendix: Detailed Error Analysis
 
 ### Gemma3 12B-IT QAT: Complete Breakdown
 
 The confusion matrix for Gemma3 reveals a systematic failure pattern where the model defaults to hitting in almost all situations:
 
 **Confusion Matrix (Policy-Grid)**
+
+![Gemma3 Confusion Matrix](figures/gemma3_confusion_heatmap.svg)
+*Gemma3 confusion matrix showing systematic "hit everything" bias*
 
 | baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -413,6 +432,16 @@ The confusion matrix for Gemma3 reveals a systematic failure pattern where the m
 
 ### Gemini 2.5 Flash (Non-Thinking): Chaotic Errors
 
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1585 | 49  | 62  | 20  | 1716 | 0.076 |
+| STAND | 113  | 1681| 0   | 0   | 1794 | 0.063 |
+| DOUBLE| 7    | 7   | 564 | 0   | 578  | 0.024 |
+| SPLIT | 4    | 0   | 0   | 253 | 257  | 0.016 |
+| total | 1709 | 1737| 626 | 273 | 4345 | 0.060 |
+
 **Top EV Leaks (First Decision; Weighted by Natural Frequency)**:
 
 | Category | Dealer | Baseline | Agent | Count | Weighted EV Loss | Share |
@@ -432,17 +461,278 @@ The confusion matrix for Gemma3 reveals a systematic failure pattern where the m
 
 ---
 
+### Gemini 2.5 Flash (Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1851 | 52  | 62  | 122 | 2087 | 0.113 |
+| STAND | 2084 | 310 | 444 | 25  | 2863 | 0.892 |
+| DOUBLE| 398  | 12  | 170 | 38  | 618  | 0.725 |
+| SPLIT | 0    | 0   | 0   | 257 | 257  | 0.000 |
+| total | 4333 | 374 | 676 | 442 | 5825 | 0.556 |
+
+**Top Leaks (First Decision; Weighted by Natural Frequency)**
+
+| Category | Dealer | Baseline | Agent | Count | Weighted EV Loss | Share |
+|---|:---:|:---:|:---:|---:|---:|---:|
+| hard 10 | 10 | HIT | DOUBLE | 12 | 31.89% |
+| pair 5/5 | 10 | HIT | DOUBLE | 5 | 6.64% |
+| hard 15 | 2  | STAND | HIT | 9 | 5.98% |
+| pair 2/2 | 10 | HIT | SPLIT | 3 | 3.99% |
+| soft 14 | 4  | HIT | DOUBLE | 5 | 3.32% |
+| soft 16 | 4  | HIT | DOUBLE | 5 | 3.32% |
+| soft 17 | 3  | HIT | DOUBLE | 5 | 3.32% |
+| soft 17 | 4  | HIT | DOUBLE | 5 | 3.32% |
+| soft 19 | 6  | DOUBLE | STAND | 5 | 3.32% |
+| hard 10 | A  | HIT | DOUBLE | 5 | 3.32% |
+| hard 9  | 2  | HIT | DOUBLE | 5 | 3.32% |
+| hard 13 | 2  | STAND | HIT | 5 | 3.32% |
+
+### Claude Sonnet 4 (Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1591 | 53  | 63  | 6  | 1713 | 0.071 |
+| STAND | 15   | 1718| 1   | 4  | 1738 | 0.012 |
+| DOUBLE| 15   | 6   | 552 | 0  | 573  | 0.037 |
+| SPLIT | 6    | 0   | 4   | 247| 257  | 0.039 |
+| total | 1627 | 1777| 620 | 257| 4281 | 0.040 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| hard 11 | A  | DOUBLE | HIT    | 8  | 6.30% |
+| hard 10 | 10 | HIT    | DOUBLE | 2  | 6.30% |
+| soft 14 | 3  | HIT    | DOUBLE | 5  | 3.94% |
+| soft 17 | 3  | HIT    | DOUBLE | 5  | 3.94% |
+| hard 8  | 5  | HIT    | DOUBLE | 5  | 3.94% |
+| soft 19 | 6  | DOUBLE | STAND  | 5  | 3.94% |
+| hard 8  | 6  | HIT    | DOUBLE | 5  | 3.94% |
+| hard 13 | 2  | STAND  | HIT    | 2  | 3.94% |
+| hard 9  | 2  | HIT    | DOUBLE | 4  | 3.15% |
+| hard 12 | 2  | HIT    | STAND  | 4  | 3.15% |
+| soft 15 | 4  | HIT    | DOUBLE | 4  | 3.15% |
+| soft 16 | 4  | HIT    | DOUBLE | 4  | 3.15% |
+
+### Claude Sonnet 4 (No Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1443 | 125 | 273 | 117 | 1958 | 0.263 |
+| STAND | 706  | 1204| 237 | 5   | 2152 | 0.441 |
+| DOUBLE| 287  | 5   | 280 | 0   | 612  | 0.542 |
+| SPLIT | 0    | 0   | 0   | 257 | 257  | 0.000 |
+| total | 2436 | 1334| 790 | 419 | 4979 | 0.361 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| hard 11 | 10 | DOUBLE | HIT    | 20 | 6.87% |
+| hard 12 | 5  | STAND  | DOUBLE | 20 | 3.01% |
+| hard 13 | 2  | STAND  | HIT    | 20 | 3.01% |
+| hard 13 | 3  | STAND  | HIT    | 20 | 3.01% |
+| hard 13 | 5  | STAND  | DOUBLE | 20 | 3.01% |
+| hard 13 | 6  | STAND  | DOUBLE | 20 | 3.01% |
+| hard 14 | 2  | STAND  | HIT    | 15 | 2.58% |
+| hard 14 | 3  | STAND  | HIT    | 15 | 2.58% |
+| hard 14 | 5  | STAND  | DOUBLE | 15 | 2.58% |
+| hard 15 | 5  | STAND  | DOUBLE | 15 | 2.58% |
+| soft 16 | 10 | HIT    | DOUBLE | 5  | 1.72% |
+| soft 18 | 10 | HIT    | STAND  | 5  | 1.72% |
+
+### GPT‑5 (Medium Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1685 | 2   | 28  | 1   | 1716 | 0.018 |
+| STAND | 12   | 1774| 7   | 0   | 1793 | 0.011 |
+| DOUBLE| 0    | 0   | 575 | 0   | 575  | 0.000 |
+| SPLIT | 0    | 0   | 0   | 257 | 257  | 0.000 |
+| total | 1697 | 1776| 610 | 258 | 4341 | 0.012 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| hard 12 | 4 | STAND  | HIT    | 3 | 24.74% |
+| soft 18 | 2 | STAND  | DOUBLE | 5 | 10.31% |
+| soft 17 | 3 | HIT    | DOUBLE | 5 | 10.31% |
+| soft 15 | 4 | HIT    | DOUBLE | 5 | 10.31% |
+| soft 16 | 4 | HIT    | DOUBLE | 5 | 10.31% |
+| soft 17 | 4 | HIT    | DOUBLE | 5 | 10.31% |
+| hard 15 | 3 | STAND  | HIT    | 1 | 8.25% |
+| hard 8  | 5 | HIT    | DOUBLE | 2 | 4.12% |
+| soft 17 | 2 | HIT    | DOUBLE | 1 | 2.06% |
+| soft 14 | 4 | HIT    | DOUBLE | 1 | 2.06% |
+| hard 8  | 6 | HIT    | DOUBLE | 1 | 2.06% |
+| soft 18 | 8 | STAND  | HIT    | 1 | 2.06% |
+
+### GPT‑5 (No Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1084 | 160 | 425 | 93  | 1762 | 0.385 |
+| STAND | 466  | 825 | 348 | 15  | 1654 | 0.501 |
+| DOUBLE| 90   | 30  | 482 | 0   | 602  | 0.199 |
+| SPLIT | 2    | 0   | 5   | 250 | 257  | 0.027 |
+| total | 1642 | 1015| 1260| 358 | 4275 | 0.382 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| hard 15 | 10 | HIT    | DOUBLE | 4  | 3.92% |
+| hard 11 | 10 | DOUBLE | HIT    | 12 | 2.94% |
+| hard 13 | 6  | STAND  | DOUBLE | 20 | 2.14% |
+| hard 13 | 5  | STAND  | DOUBLE | 19 | 2.08% |
+| hard 13 | 3  | STAND  | DOUBLE | 18 | 2.02% |
+| hard 13 | 4  | STAND  | DOUBLE | 18 | 2.02% |
+| hard 15 | 10 | HIT    | STAND  | 8  | 1.96% |
+| hard 14 | 5  | STAND  | DOUBLE | 15 | 1.84% |
+| hard 14 | 6  | STAND  | DOUBLE | 15 | 1.84% |
+| hard 10 | 10 | HIT    | DOUBLE | 7  | 1.71% |
+| hard 14 | 3  | STAND  | DOUBLE | 12 | 1.65% |
+| hard 14 | 4  | STAND  | DOUBLE | 12 | 1.65% |
+
+### GPT‑5 Nano (Medium Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1652 | 9   | 51  | 9   | 1721 | 0.040 |
+| STAND | 134  | 1690| 2   | 1   | 1827 | 0.075 |
+| DOUBLE| 1    | 7   | 567 | 0   | 575  | 0.014 |
+| SPLIT | 3    | 2   | 0   | 252 | 257  | 0.019 |
+| total | 1790 | 1708| 620 | 262 | 4380 | 0.050 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| hard 15 | 2 | STAND  | HIT    | 11 | 11.44% |
+| hard 13 | 2 | STAND  | HIT    | 13 | 10.95% |
+| hard 16 | 2 | STAND  | HIT    | 5  | 8.46% |
+| hard 15 | 3 | STAND  | HIT    | 8  | 8.46% |
+| hard 14 | 2 | STAND  | HIT    | 9  | 7.46% |
+| hard 10 | 10| HIT    | DOUBLE | 3  | 5.97% |
+| hard 13 | 3 | STAND  | HIT    | 6  | 5.97% |
+| hard 14 | 3 | STAND  | HIT    | 6  | 2.99% |
+| soft 17 | 3 | HIT    | DOUBLE | 5  | 2.49% |
+| soft 15 | 4 | HIT    | DOUBLE | 5  | 2.49% |
+| soft 16 | 4 | HIT    | DOUBLE | 5  | 2.49% |
+| soft 17 | 4 | HIT    | DOUBLE | 5  | 2.5% |
+
+### GPT‑5 Nano (No Thinking): Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1586 | 298 | 20  | 116 | 2020 | 0.215 |
+| STAND | 2105 | 814 | 21  | 37  | 2977 | 0.727 |
+| DOUBLE| 479  | 94  | 7   | 35  | 615  | 0.989 |
+| SPLIT | 0    | 0   | 0   | 257 | 257  | 0.000 |
+| total | 4170 | 1206| 48  | 445 | 5869 | 0.546 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| pair 10/10 | 10 | STAND | SPLIT  | 5  | 7.0% |
+| hard 17    | 10 | STAND | HIT    | 7  | 3.3% |
+| hard 11    | 10 | DOUBLE| HIT    | 16 | 2.8% |
+| hard 12    | 10 | HIT   | STAND  | 3  | 1.6% |
+| hard 13    | 5  | STAND | HIT    | 19 | 1.5% |
+| hard 18    | 10 | STAND | HIT    | 2  | 1.4% |
+| hard 19    | 10 | STAND | DOUBLE | 2  | 1.4% |
+| hard 19    | 10 | STAND | HIT    | 2  | 1.4% |
+| hard 13    | 6  | STAND | HIT    | 14 | 1.3% |
+| hard 14    | 4  | STAND | HIT    | 14 | 1.3% |
+| hard 12    | 5  | STAND | HIT    | 16 | 1.2% |
+| hard 13    | 3  | STAND | HIT    | 15 | 1.2% |
+
+### Gemini 2.5 Pro: Detailed Breakdown
+
+**Confusion Matrix (Policy-Grid)**
+
+| baseline\agent | HIT | STAND | DOUBLE | SPLIT | row_total | row_mistake_rate |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HIT   | 1687 | 8   | 24  | 2   | 1721 | 0.020 |
+| STAND | 40   | 1754| 11  | 1   | 1806 | 0.029 |
+| DOUBLE| 2    | 1  | 571 | 0   | 574  | 0.005 |
+| SPLIT | 0    | 1  | 0   | 256 | 257  | 0.004 |
+| total | 1729 | 1764| 606 | 259 | 4358 | 0.021 |
+
+**Top Weighted Mistakes (First Decision)**
+
+| Category | Dealer | Baseline | Agent | Mistakes | Weighted Share |
+|---|:---:|:---:|:---:|---:|---:|
+| hard 15 | 2 | STAND  | HIT    | 4 | 16% |
+| hard 14 | 2 | STAND  | HIT    | 2 | 13% |
+| soft 17 | 3 | HIT    | DOUBLE | 5 | 7.9% |
+| soft 15 | 4 | HIT    | DOUBLE | 5 | 7.9% |
+| soft 16 | 4 | HIT    | DOUBLE | 5 | 7.9% |
+| soft 17 | 4 | HIT    | DOUBLE | 5 | 7.9% |
+| hard 13 | 2 | STAND  | HIT    | 4 | 6.3% |
+| hard 18 | 9 | STAND  | HIT    | 1 | 6.3% |
+| soft 19 | 5 | STAND  | DOUBLE | 3 | 4.7% |
+| soft 18 | 2 | STAND  | DOUBLE | 2 | 3.2% |
+| soft 19 | 3 | STAND  | DOUBLE | 2 | 3.2% |
+| hard 13 | 3 | STAND  | HIT    | 2 | 3.2% |
+
+### Thinking Load Heatmaps (Difficulty by Deliberation)
+
+We aggregate "thinking load" (average characters of llm_thinking text, falling back to output tokens when available) across the four thinking runs (Claude Sonnet 4, Gemini 2.5 Flash, GPT‑5 medium, GPT‑5 Nano medium) and average per starting cell to estimate perceived difficulty. Grids show the average thinking per start — higher numbers indicate harder decisions for models.
+
+![Hard Totals Thinking Load](figures/thinking_hard_grid.svg)
+*Hard totals grid: rows = hard total, cols = dealer 2–10,A*
+
+![Soft Totals Thinking Load](figures/thinking_soft_grid.svg)
+*Soft totals grid: rows = soft total, cols = dealer 2–10,A*
+
+![Pairs Thinking Load](figures/thinking_pairs_grid.svg)
+*Pairs grid: rows = pairs A/A..10/10, cols = dealer 2–10,A*
+
+Repro: generate the per‑cell table and build charts
+
+- `python tools/aggregate_thinking.py baselines/20250911_policy-grid_llm_gpt-5-med-thinking.jsonl baselines/20250910_policy-grid_llm_claude-sonnet-4-20250514-thinking.jsonl baselines/20250909_policy-grid_llm_gemini-2-5-flash-thinking.jsonl baselines/20250911_policy-grid_llm_gpt-5-nano-med-thinking.jsonl`
+- `python tools/build_thinking_charts.py --per-cell figures/thinking_load_by_cell.csv --out-dir figures`
+
+Validation spot‑checks of narrative examples (from the same logs)
+- Pair 9/9 vs 8: Gemini Flash out_tokens max 8,191 on a first decision (most complex event observed)
+- Soft 20 stand (Claude): min out_tokens 108 across first decisions (very light)
+- Hard 11 vs 3–6 (Gemini): min out_tokens 180; median ~362 (simple)
+- Soft 18 “edge cases” (Gemini): max out_tokens 1,867; upper tail ~1.4–1.9k (complex)
+
+</details>
+<span id="after-appendix"></span>
+
 ## Footnotes
 
-¹ **Expected Value Methodology**: The +2.6% EV for Basic Strategy represents the empirical result from the specific 2,750 hands tested, not the theoretical house edge (~-0.5% under standard rules). This sample-specific baseline ensures fair comparison since all models play identical hands with identical random seeds. The positive EV indicates this particular sample was player-favorable, which is within normal variance for blackjack.
+[^1]: **Expected Value Methodology**: The +2.6% EV for Basic Strategy represents the empirical result from the specific 2,750 hands tested, not the theoretical house edge (~-0.5% under standard rules). This sample-specific baseline ensures fair comparison since all models play identical hands with identical random seeds. The positive EV indicates this particular sample was player-favorable, which is within normal variance for blackjack.
 
-² **"Thinking" Definition**: "Thinking" refers to Chain-of-Thought prompting where models generate intermediate reasoning steps before outputting their final decision. For OpenAI models, this uses the reasoning effort parameter; for Anthropic models, this enables the thinking budget; for Google models, this uses reasoning summaries. Non-thinking models respond directly without explicit step-by-step reasoning.
+[^2]: **"Thinking" Definition**: "Thinking" refers to Chain-of-Thought prompting where models generate intermediate reasoning steps before outputting their final decision. For OpenAI models, this uses the reasoning effort parameter; for Anthropic models, this enables the thinking budget; for Google models, this uses reasoning summaries. Non-thinking models respond directly without explicit step-by-step reasoning.
 
-³ **Model Specifications**: Exact model identifiers used: Claude Sonnet 4 (`claude-sonnet-4-20250514`), GPT-5 (`gpt-5`), Gemini 2.5 Flash (`gemini-2.5-flash`). There is strong community consensus that Sonoma Sky/Dusk Alpha models are cloaked xAI Grok variants.
+[^3]: **Model Specifications**: Exact model identifiers used: Claude Sonnet 4 (`claude-sonnet-4-20250514`), GPT-5 (`gpt-5`), Gemini 2.5 Flash (`gemini-2.5-flash`). There is strong community consensus that Sonoma Sky/Dusk Alpha models are cloaked xAI Grok variants.
 
-⁴ **Statistical Confidence**: Wide 95% confidence intervals (e.g., [-4.2%, +5.8%]) reflect the inherent variance in blackjack outcomes. Results are based on 5 repetitions of the 550-cell policy grid (2,750 total hands per model). Significantly more repetitions would be required to achieve tighter confidence bounds for distinguishing top-tier models.
+[^4]: **Statistical Confidence**: Wide 95% confidence intervals (e.g., [-4.2%, +5.8%]) reflect the inherent variance in blackjack outcomes. Results are based on 5 repetitions of the 550-cell policy grid (2,750 total hands per model). Significantly more repetitions would be required to achieve tighter confidence bounds for distinguishing top-tier models.
 
-⁵ **Illegal Move Handling**: The legality guard was rarely triggered across all models tested, with most showing zero illegal attempts. When illegal moves occurred, they were logged and handled by a deliberately bad fallback policy (“BadAgent”) that chooses intentionally poor but legal actions (e.g., doubling whenever possible, splitting tens) to penalize rule violations while allowing benchmark continuation.
+[^5]: **Illegal Move Handling**: The legality guard was rarely triggered across all models tested, with most showing zero illegal attempts. When illegal moves occurred, they were logged and handled by a deliberately bad fallback policy (“BadAgent”) that chooses intentionally poor but legal actions (e.g., doubling whenever possible, splitting tens) to penalize rule violations while allowing benchmark continuation.
+
+[^6]: See, for example, this discussion: https://manifold.markets/iwakura/who-is-behind-the-sonoma-cloaked-mo
 
 <!-- Optional figures/placeholders -->
 <!-- Figure: Confusion matrix (baseline vs agent) -->

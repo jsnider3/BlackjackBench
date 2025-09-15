@@ -106,8 +106,11 @@ def impact_table(agent_path: Path, baseline_path: Path, top: int = 12) -> List[D
             "weighted_ev_loss": lw,
         })
     rows.sort(key=lambda r: r["weighted_ev_loss"], reverse=True)
+    # Compute shares against positive-loss mass only to avoid negative/ >100% shares
+    positive_total = sum(max(0.0, r["weighted_ev_loss"]) for r in rows)
     for r in rows:
-        r["share"] = (r["weighted_ev_loss"] / total_loss_w) if total_loss_w else 0.0
+        lw = max(0.0, r["weighted_ev_loss"])  # clamp to positive for share
+        r["share"] = (lw / positive_total) if positive_total else 0.0
     return rows[:top]
 
 
@@ -163,4 +166,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

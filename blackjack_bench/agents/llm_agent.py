@@ -82,7 +82,11 @@ class LLMAgent:
                 reasoning=reasoning,
             )
         if ask_fn is None and provider in {"openrouter", "openrouter.ai"}:
-            ask_fn = self.openrouter_ask(model=model or "openrouter/sonoma-sky-alpha", temperature=temperature)
+            ask_fn = self.openrouter_ask(
+                model=model or "openrouter/sonoma-sky-alpha",
+                temperature=temperature,
+                reasoning=reasoning,
+            )
         # Anthropic Claude
         if ask_fn is None and provider in {"anthropic", "claude"}:
             # Auto-pick output cap: small when not thinking, larger when thinking
@@ -181,6 +185,15 @@ class LLMAgent:
                         info["llm_thinking"] = _OPENAI_THINKING
                 except Exception:
                     pass
+            # Generic provider metadata attachment (covers openrouter and others)
+            try:
+                md = _get_provider_metadata(self.provider)
+                if md.get("thinking") and ("llm_thinking" not in info):
+                    info["llm_thinking"] = md["thinking"]
+                if md.get("usage") and ("llm_usage" not in info):
+                    info["llm_usage"] = md["usage"]
+            except Exception:
+                pass
         out = text.strip().upper()
         # Allow variants like "HIT", "Action: HIT", or JSON-like outputs
         for a in observation.allowed_actions:
@@ -549,7 +562,7 @@ class LLMAgent:
         return _ask
 
     @staticmethod
-    def openrouter_ask(*, model: str, temperature: float = 0.0, base_url: str = "https://openrouter.ai/api/v1") -> Callable[[str], str]:
+    def openrouter_ask(*, model: str, temperature: float = 0.0, reasoning: str = "none", base_url: str = "https://openrouter.ai/api/v1") -> Callable[[str], str]:
         """Create an ask_fn that queries OpenRouter's chat completions API.
 
         Requires the env var OPENROUTER_API_KEY. Honors temperature and limits output tokens.
@@ -572,7 +585,108 @@ class LLMAgent:
         if os.environ.get("OPENROUTER_X_TITLE"):
             headers["X-Title"] = os.environ["OPENROUTER_X_TITLE"]
 
-        def _ask_req(prompt: str) -> str:
+        def _extract_choice_text(data: Dict[str, Any]) -> str:
+            """Extract text content from OpenRouter chat completion response.
+
+            Handles OpenAI-compatible strings, list-of-parts with various part types
+            (e.g., 'text', 'output_text'), and nested structures by scanning for
+            'text' or string 'content' fields.
+            """
+            def _gather_text(obj: Any, acc: list[str], depth: int = 0) -> None:
+                if depth > 4:
+                    return
+                if isinstance(obj, str):
+                    s = obj.strip()
+                    if s:
+                        acc.append(s)
+                    return
+                if isinstance(obj, dict):
+                    part_type = obj.get("type") if isinstance(obj.get("type"), str) else None
+                    # Avoid collecting explicit 'thinking' text blocks
+                    is_thinking = isinstance(part_type, str) and part_type.lower() == "thinking"
+                    # Prefer explicit text fields
+                    for key in ("output_text", "text"):
+                        v = obj.get(key)
+                        if isinstance(v, str) and v.strip():
+                            if not (is_thinking and key == "text"):
+                                acc.append(v.strip())
+                    # Some providers nest content as string
+                    v = obj.get("content")
+                    if isinstance(v, str) and v.strip():
+                        acc.append(v.strip())
+                    elif v is not None:
+                        _gather_text(v, acc, depth + 1)
+                    # Also scan other values lightly
+                    for k, v2 in obj.items():
+                        if k in {"text", "output_text", "content"}:
+                            continue
+                        if isinstance(v2, (dict, list)):
+                            _gather_text(v2, acc, depth + 1)
+                    return
+                if isinstance(obj, list):
+                    for it in obj:
+                        _gather_text(it, acc, depth + 1)
+                    return
+
+            try:
+                choices = data.get("choices") or []
+                if not choices:
+                    return ""
+                msg = choices[0].get("message") or {}
+                content = msg.get("content")
+                # If simple string content
+                if isinstance(content, str):
+                    s = content.strip()
+                    if s:
+                        return s
+                # Otherwise, gather from any nested parts
+                texts: list[str] = []
+                _gather_text(content, texts)
+                if not texts and isinstance(choices[0].get("text"), str):
+                    texts.append(str(choices[0]["text"]).strip())
+                # Join and trim whitespace, keep first non-empty line to be safe
+                out = "\n".join(t for t in texts if t).strip()
+                return out
+            except Exception:
+                return ""
+
+        def _extract_thinking(data: Dict[str, Any]) -> str:
+            """Try to extract model "thinking" content from responses that include it.
+
+            Many providers wrap thinking in parts with type='thinking' or include a
+            'reasoning' object. We gather any such text conservatively.
+            """
+            thoughts: list[str] = []
+            try:
+                choices = data.get("choices") or []
+                if not choices:
+                    return ""
+                ch0 = choices[0]
+                # Choice-level 'reasoning' field sometimes exists
+                reasoning = ch0.get("reasoning")
+                if isinstance(reasoning, dict):
+                    for key in ("text", "output_text", "content"):
+                        v = reasoning.get(key)
+                        if isinstance(v, str) and v.strip():
+                            thoughts.append(v.strip())
+                # Message-level content parts
+                msg = ch0.get("message") or {}
+                content = msg.get("content")
+                parts = content if isinstance(content, list) else None
+                if isinstance(parts, list):
+                    for part in parts:
+                        if isinstance(part, dict):
+                            ptype = str(part.get("type", "")).lower()
+                            if ptype == "thinking":
+                                for key in ("text", "output_text", "content"):
+                                    v = part.get(key)
+                                    if isinstance(v, str) and v.strip():
+                                        thoughts.append(v.strip())
+            except Exception:
+                pass
+            return "\n".join(t for t in thoughts if t).strip()
+
+        def _ask_req(prompt: str, *, last_error: Dict[str, str]) -> str:
             try:
                 import requests  # type: ignore
                 payload = {
@@ -582,21 +696,55 @@ class LLMAgent:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": temperature,
-                    "max_tokens": 8,
+                    # Large cap to accommodate models that emit hidden thinking
+                    "max_tokens": 8192,
                 }
+                # Best-effort enable reasoning for providers that support it
+                try:
+                    if reasoning and reasoning.lower() != "none":
+                        payload["reasoning"] = {"effort": reasoning.lower()}
+                        payload["include_reasoning"] = True
+                except Exception:
+                    pass
                 r = requests.post(url, headers=headers, json=payload, timeout=120)
                 r.raise_for_status()
                 data = r.json()
-                choices = data.get("choices") or []
-                if choices:
-                    msg = choices[0].get("message", {}).get("content", "")
-                    return msg or ""
-                return ""
+                if isinstance(data, dict) and data.get("error"):
+                    # Surface error details for better debugging upstream
+                    err = data.get("error")
+                    msg = err.get("message") if isinstance(err, dict) else str(err)
+                    last_error["msg"] = f"OpenRouter error: {msg}"
+                    print(f"[openrouter-debug] error object: {msg}")
+                    return ""
+                out = _extract_choice_text(data)
+                # Capture thinking if present for metadata
+                try:
+                    thinking = _extract_thinking(data)
+                    if thinking:
+                        _set_provider_metadata("openrouter", thinking=thinking)
+                except Exception:
+                    pass
+                # Capture usage
+                try:
+                    usage = data.get("usage")
+                    if isinstance(usage, dict):
+                        _set_provider_metadata("openrouter", usage=usage)
+                except Exception:
+                    pass
+                if not out:
+                    # Help debug unexpected shapes
+                    try:
+                        snippet = str(data)[:300]
+                        print(f"[openrouter-debug] no content extracted; response snippet: {snippet}")
+                    except Exception:
+                        pass
+                return out
             except Exception as e:
+                last_error["msg"] = f"_ask_req exception: {type(e).__name__}: {e}"
                 print(f"[openrouter-debug] exception in _ask_req: {e}")
                 return ""
 
-        def _ask_fallback(prompt: str) -> str:
+        def _ask_fallback(prompt: str, *, last_error: Dict[str, str]) -> str:
             from urllib import request as _ur, error as _err
             payload = _json.dumps({
                 "model": model,
@@ -605,23 +753,56 @@ class LLMAgent:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": temperature,
-                "max_tokens": 8,
+                "max_tokens": 8192,
+                # Mirror best-effort reasoning flags
+                **({"reasoning": {"effort": reasoning.lower()}, "include_reasoning": True} if (reasoning and reasoning.lower() != "none") else {}),
             }).encode("utf-8")
             req = _ur.Request(url, data=payload, headers=headers, method="POST")
             try:
                 with _ur.urlopen(req, timeout=120) as resp:  # type: ignore
                     data = _json.loads(resp.read().decode("utf-8"))
-                    choices = data.get("choices") or []
-                    if choices:
-                        return choices[0].get("message", {}).get("content", "") or ""
-                    return ""
+                    if isinstance(data, dict) and data.get("error"):
+                        err = data.get("error")
+                        msg = err.get("message") if isinstance(err, dict) else str(err)
+                        last_error["msg"] = f"OpenRouter error: {msg}"
+                        print(f"[openrouter-debug] error object (fallback): {msg}")
+                        return ""
+                    out = _extract_choice_text(data)
+                    # Capture usage on fallback too
+                    try:
+                        usage = data.get("usage")
+                        if isinstance(usage, dict):
+                            _set_provider_metadata("openrouter", usage=usage)
+                    except Exception:
+                        pass
+                    # Capture thinking if present for metadata (fallback path)
+                    try:
+                        thinking = _extract_thinking(data)
+                        if thinking:
+                            _set_provider_metadata("openrouter", thinking=thinking)
+                    except Exception:
+                        pass
+                    if not out:
+                        try:
+                            snippet = str(data)[:300]
+                            print(f"[openrouter-debug] no content extracted (fallback); response snippet: {snippet}")
+                        except Exception:
+                            pass
+                    return out
             except _err.URLError as e:
+                last_error["msg"] = f"_ask_fallback exception: {type(e).__name__}: {e}"
                 print(f"[openrouter-debug] exception in _ask_fallback: {e}")
                 return ""
 
         def _ask(prompt: str) -> str:
-            out = _ask_req(prompt)
-            return out if out else _ask_fallback(prompt)
+            last_error: Dict[str, str] = {}
+            out = _ask_req(prompt, last_error=last_error)
+            if not out:
+                out = _ask_fallback(prompt, last_error=last_error)
+            # If still empty and we captured an error reason, raise so upstream logs it
+            if not out and last_error.get("msg"):
+                raise RuntimeError(f"OpenRouter returned no content. {last_error['msg']}")
+            return out
 
         return _ask
 
