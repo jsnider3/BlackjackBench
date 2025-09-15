@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "BlackJackBench and The Thinking Revolution"
-date: 2025-09-15 9:00:00
+date: 2025-09-15 09:00:00 -0400
 categories: update ai benchmark blackjack
 ---
 
@@ -9,7 +9,7 @@ categories: update ai benchmark blackjack
 - I built BlackJackBench: a Blackjack benchmark covering all 550 initial hands. It can be easily rerun with everything logged and random seeds controllable.
 - Key metric is difference in expected value (ΔEV) compared to the basic‑strategy baseline on the exact same seeded hands. With thinking enabled, models approach baseline: Claude Sonnet 4 (ΔEV ≈ −0.01%, 4.0% mistakes), GPT‑5 Nano (medium) (ΔEV ≈ −0.06%, 5.0%), and Gemini 2.5 Flash improves from ΔEV −66.6% (no thinking) to −0.37% with thinking[^2].
 - "Perfect" computer play is straightforward; the interesting question is how LLMs compare under fair prompting and strict legality and what model progress implies for general problems.
-- Many non-thinking models perform poorly (making mistakes on 40-80% hands), but thinking-enabled models can match basic strategy accuracy.
+- Many non-thinking models perform poorly (making mistakes on 40–80% of hands), but thinking-enabled models can match basic strategy accuracy.
 
 ## Why Blackjack
 - It has simple, well‑understood rules with clear outcomes and well-defined truth. The player knows a lot, but not everything.
@@ -23,7 +23,7 @@ categories: update ai benchmark blackjack
 - Metrics:
   - EV/hand: mean net units per hand over the executed grid reps (unweighted).
   - ev_weighted: natural‑frequency weighted EV over the grid.
-  - mistake_rate: fraction of decisions that differ from a fixed six‑deck H17 DAS basic strategy[^7].
+  - mistake_rate: fraction of decisions that differ from a fixed six‑deck H17 DAS basic strategy[^6].
 - Reproducibility: Deterministic RNG seeds; per‑decision JSONL logs enable exact replay/audit; supports parallelizing long runs and resuming them after interruption.
 
 ## Methodology: Key Concepts
@@ -40,9 +40,9 @@ When computing the final EV, each hand's performance gets multiplied by its natu
 - A mistake on 10,10 vs A hurts the weighted EV significantly (high frequency × EV loss)
 - The same mistake on A,2 vs 7 barely affects weighted EV (low frequency × EV loss)
 
-Thus, weighted EV emphasizes performance on the hands players actually encounter most often.[^8]
+Thus, weighted EV emphasizes performance on the hands players actually encounter most often.[^7]
 
-**Basic Strategy Baseline**: We compare against fixed 6-deck H17 DAS basic strategy tables[^7]. This isn't perfect play (card counting would be better) but represents the established "correct" decision for each situation.
+**Basic Strategy Baseline**: We compare against fixed 6-deck H17 DAS basic strategy tables[^6]. This isn't perfect play (card counting would be better[^10]) but represents the established "correct" decision for each situation.
 
 **Mistake Rate**: A simple percentage of decisions that differ from basic strategy.
 
@@ -101,7 +101,7 @@ Key takeaways:
 
 ### The Capability Threshold Moment
 
-**These results capture a fascinating moment in AI development.** Blackjack basic strategy sits at a capability threshold where today's models need thinking to reach parity, but won't in the near future. Test‑time compute acts as a temporary bridge—what requires explicit reasoning today will become implicit knowledge tomorrow.
+**These results capture a fascinating moment in AI development.** Blackjack basic strategy sits at a capability threshold where today's models need thinking to reach parity, but won't in the near future. Test‑time compute acts as a temporary bridge—what requires explicit reasoning today will become implicit knowledge tomorrow[^8].
 
 The evidence is striking: six different models achieve near-perfect performance with thinking enabled, while their identical non-thinking counterparts fail dramatically. Gemini 2.5 Flash's 66-point EV swing exemplifies this threshold effect—the same model architecture performs either competently or catastrophically depending solely on whether explicit reasoning is enabled. This suggests we're witnessing a capability boundary where test-time compute multiplies performance precisely because the underlying task difficulty sits at the current frontier of implicit model knowledge.
 
@@ -173,8 +173,8 @@ GPT‑5 Nano's performance (ΔEV −51% vs baseline, 55% mistake rate) shows how
 **Where it went disastrously wrong:**
 - **Splitting 10,10 vs dealer 10**: Giving up the second-best hand for two okay hands. In this run, it is the top EV leak, making up ~7.0% of its loss.
 - **Hitting hard 17+ vs strong dealers**: A fundamental mistake that it kept making. 
-- **Doubling conservatism**: When doubling is profitable, 99% of the time it doesn't do it.
-- **Standing inconsistency**: 73% mistake rate, often standing when should hit
+- **Doubling conservatism**: When doubling is profitable, 99% of the time it doesn't double.
+- **Standing inconsistency**: 73% mistake rate, often standing when it should hit
 
 This pattern suggests GPT‑5 Nano has memorized some blackjack “rules” (like split A/A and 8/8) but lacks the strategic framework to apply them consistently. The result is worse than random play—systematic errors compound losses. The model’s perfect recognition of correct splits makes its other failures even more puzzling, highlighting how LLMs can exhibit highly uneven competence across related tasks.
 
@@ -216,11 +216,11 @@ Two lenses help explain the performance gaps we observe: (1) where models sit on
 
 ### Scaling Perspective
 
-Basic blackjack sits near a moving capability threshold. Today, general‑purpose models reach basic‑strategy parity with test‑time compute (thinking) but not without it. A little in the past they struggled even with reasoning. A little in the future, stronger models will match basic strategy even without explicit thinking. Test‑time compute acts as a capability multiplier near thresholds and is most valuable in harder or shifting situations.
+Basic blackjack sits near a moving capability threshold. Today, general‑purpose models reach basic‑strategy parity with test‑time compute (thinking) but not without it. A little in the past they struggled even with reasoning. A little in the future, stronger models will match basic strategy even without explicit thinking. Test‑time compute acts as a capability multiplier near thresholds and is most valuable in harder or shifting situations[^8].
 
 ### Knowledge vs. Execution
 
-Before running benchmarks, we surveyed models about their blackjack knowledge (see [model_thoughts/](model_thoughts/)). Most stated the right rules and core principles (split A/A and 8/8, never split 10/10, stand on hard 17+), with the greatest variation in doubles. Gemma is the only one with clear errors, where it suggests doubling down on soft 19-21.
+Before running benchmarks, we surveyed models about their blackjack knowledge (see [model_thoughts/](https://github.com/jsnider3/BlackjackBench/tree/main/model_thoughts)). Most stated the right rules and core principles (split A/A and 8/8, never split 10/10, stand on hard 17+), with the greatest variation in doubles. Gemma is the only one with clear errors, where it suggests doubling down on soft 19-21.
 
 **Key finding: knowledge alone isn’t sufficient.** Even models with solid theoretical understanding failed dramatically without thinking enabled. This contrasts with skilled human players, who execute basic strategy automatically because they’ve memorized it.
 
@@ -259,7 +259,7 @@ The benchmark establishes three key findings specific to blackjack strategy:
 
 **Knowledge‑execution gaps**: Models often understand strategy when asked directly yet fail to execute consistently without thinking scaffolds. Even perfect knowledge of rules like "split A/A" doesn't guarantee consistent application across related decisions.
 
-**Economic considerations**: For blackjack specifically, reasoning costs ($0.0002–$0.0044 per decision) exceed the value since lookup tables solve the game perfectly. However, this cost analysis reveals precisely why blackjack makes an ideal benchmark—it provides a controlled environment to measure reasoning capabilities without the practical utility obscuring the scientific insights. The benchmark's true value lies in understanding when and how AI reasoning transforms performance at capability thresholds, insights that directly apply to domains where lookup tables don't exist and reasoning costs are justified by decision stakes.
+**Economic considerations**: For blackjack specifically, reasoning costs ($0.0002–$0.0044 per decision) exceed the value since lookup tables solve the game perfectly[^9]. However, this cost analysis reveals precisely why blackjack makes an ideal benchmark—it provides a controlled environment to measure reasoning capabilities without the practical utility obscuring the scientific insights. The benchmark's true value lies in understanding when and how AI reasoning transforms performance at capability thresholds, insights that directly apply to domains where lookup tables don't exist and reasoning costs are justified by decision stakes.
 
 ### The Broader Implications
 
@@ -293,17 +293,23 @@ This work opens several promising avenues for further investigation:
 
 [^1]: **Expected Value Methodology**: The +2.6% EV for Basic Strategy represents the empirical result from the specific 2,750 hands tested, not the theoretical house edge (~-0.5% under standard rules). This sample-specific baseline ensures fair comparison since all models play identical hands with identical random seeds. The positive EV indicates this particular sample was player-favorable, which is within normal variance for blackjack.
 
-[^2]: "Thinking" refers to Chain-of-Thought prompting where models generate intermediate reasoning steps before outputting their final decision. For OpenAI models, this uses the reasoning effort parameter; for Anthropic models, this enables the thinking budget; for Google models, this uses reasoning summaries. Non-thinking models respond directly without explicit step-by-step reasoning.
+[^2]: "Thinking" refers to Chain-of-Thought prompting where models generate intermediate reasoning steps before outputting their final decision. For OpenAI models, this uses the reasoning effort parameter; for Anthropic models, this enables the thinking budget; for Google models, this uses reasoning summaries. Non-thinking models respond directly without explicit step-by-step reasoning. Foundational work on CoT and test-time reasoning includes: Wei et al., 2022 ("Chain-of-Thought Prompting Elicits Reasoning"; arXiv:2201.11903), Kojima et al., 2022 ("Large Language Models are Zero-Shot Reasoners"; arXiv:2205.11916), and Wang et al., 2022 ("Self-Consistency Improves Chain of Thought Reasoning in Large Language Models"; arXiv:2203.11171).
 
 [^3]: **Model specifications**: Exact model identifiers used: Claude Sonnet 4 (`claude-sonnet-4-20250514`), Claude Opus 4.1 (`claude-opus-4-1-20250805`), GPT‑5 (`gpt-5`), Gemini 2.5 Flash (`gemini-2.5-flash`), Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`), Gemini 2.5 Pro (`gemini-2.5-pro`). Sonoma Sky Alpha and Sonoma Dusk Alpha are stealth models hosted on OpenRouter which are strongly suspected to be Grok 4 variants. See, for example: https://manifold.markets/iwakura/who-is-behind-the-sonoma-cloaked-mo
 
 [^4]: **Statistical Confidence**: Wide 95% confidence intervals (e.g., [-4.2%, +5.8%]) reflect the inherent variance in blackjack outcomes. Results are based on 5 repetitions of the 550-cell policy grid (2,750 total hands per model). Significantly more repetitions would be required to achieve tighter confidence bounds for distinguishing top-tier models.
 
-[^5]: **Illegal Move Handling**: The legality guard was rarely triggered across all models tested, with most showing zero illegal attempts. When illegal moves occurred, they were logged and handled by a deliberately bad fallback policy ("BadAgent") that chooses intentionally poor but legal actions (e.g., doubling whenever possible, splitting tens) to penalize rule violations while allowing benchmark continuation.
+[^5]: **Illegal Move Handling**: The legality guard was rarely triggered across all models tested, with most showing zero illegal attempts. When illegal moves occurred, they were logged and handled by a deliberately bad fallback policy ("BadAgent") that chooses intentionally poor but legal actions (e.g., doubling whenever possible, splitting tens) to penalize rule violations while allowing benchmark continuation. Implementation: [blackjack_bench/agents/guarded.py](https://github.com/jsnider3/BlackjackBench/blob/main/blackjack_bench/agents/guarded.py), [blackjack_bench/agents/bad_agent.py](https://github.com/jsnider3/BlackjackBench/blob/main/blackjack_bench/agents/bad_agent.py), with logging and reporting in [blackjack_bench/eval.py](https://github.com/jsnider3/BlackjackBench/blob/main/blackjack_bench/eval.py) and [blackjack_bench/cli_helpers.py](https://github.com/jsnider3/BlackjackBench/blob/main/blackjack_bench/cli_helpers.py).
 
 [^6]: Six-deck H17 DAS chart used for the baseline policy: https://www.blackjackapprenticeship.com/wp-content/uploads/2024/09/H17-Basic-Strategy.pdf
 
-[^7]: Player two‑card categories are unordered (e.g., A,2 ≡ 2,A), which is why P(A,2) is multiplied by 2 in the example. Under the independence/infinite‑deck approximation, weights across all 550 cells sum to 1.0. Implementation: `blackjack_bench/weights.py::grid_weights_infinite_deck`.
+[^7]: Player two‑card categories are unordered (e.g., A,2 ≡ 2,A), which is why P(A,2) is multiplied by 2 in the example. Under the independence/infinite‑deck approximation, weights across all 550 cells sum to 1.0. Implementation: [blackjack_bench/weights.py::grid_weights_infinite_deck](https://github.com/jsnider3/BlackjackBench/blob/main/blackjack_bench/weights.py).
+
+[^8]: **Test‑time compute for reasoning**: Increasing test‑time sampling/search typically improves reasoning accuracy. See Yao et al., 2023 ("Tree of Thoughts: Deliberate Problem Solving with Large Language Models"; arXiv:2305.10601) and Wang et al., 2022 (Self‑Consistency) for methods that trade additional inference compute for better results.
+
+[^9]: **Reasoning cost methodology**: Costs computed by multiplying observed tokens per decision (prompt + completion, including thinking traces) by provider rates per 1K tokens. Pricing sources: OpenAI API pricing (https://openai.com/api/pricing), Anthropic pricing (https://www.anthropic.com/pricing), and Google Gemini pricing (https://ai.google.dev/pricing or https://cloud.google.com/vertex-ai/pricing#gemini). Normalization: identical accounting across providers; provider‑specific rounding and tiering ignored.
+
+[^10]: **Card counting outperforms basic strategy**: With favorable rules and sufficient penetration, card counting can yield positive player EV, exceeding fixed basic strategy. See Wizard of Odds: https://wizardofodds.com/games/blackjack/card-counting/
 
 ## Appendix: Detailed Error Analysis and Repro
 
@@ -313,9 +319,9 @@ Below are detailed per‑model confusion matrices (policy‑grid; decision‑lev
 - Policy‑grid weighted (basic):
   - `python -m blackjack_bench.cli run --agent basic --track policy-grid --weighted --reps 100 --seed 7`
 - LLM example (Gemini API with thinking):
-  - `python -m blackjack_bench.cli run --agent llm --guard --llm-provider gemini --llm-model gemini-2.5-flash --reasoning low --track policy-grid --weighted --reps 5 --seed 7`
+  - `python -m blackjack_bench.cli run --agent llm --guard --llm-provider gemini --llm-model gemini-2.5-flash --reasoning medium --track policy-grid --weighted --reps 5 --seed 7`
 - LLM example (Anthropic Claude with thinking):
-  - `python -m blackjack_bench.cli run --agent llm --guard --llm-provider anthropic --llm-model claude-sonnet-4-20250514 --reasoning low --track policy-grid --weighted --reps 5 --seed 7`
+  - `python -m blackjack_bench.cli run --agent llm --guard --llm-provider anthropic --llm-model claude-sonnet-4-20250514 --reasoning medium --track policy-grid --weighted --reps 5 --seed 7`
 - Inspect confusion (baseline vs agent):
   - `python tools/summarize_confusion.py --track policy-grid logs/<timestamp>_policy-grid_<agent>_<model>.jsonl --csv confusion.csv`
 
