@@ -122,7 +122,7 @@ The most striking finding is how thinking transforms the same underlying models.
 This underscores that explicit test‑time reasoning, not just stored knowledge, drives parity with basic strategy.
 
 #### GPT‑5 Nano (Medium Thinking): Near‑Basic Strategy
-- ΔEV vs baseline: −0.06%
+- ΔEV vs baseline: −0.12%
 - Mistake rate: 5.0% over 4,380 decisions; 2,750 hands; full 550‑cell coverage
 - Confusion hotspots:
   - hard 13–16 vs dealer 2–3: chooses HIT instead of correct STAND
@@ -220,7 +220,7 @@ Basic blackjack sits near a moving capability threshold. Today, general‑purpos
 
 ### Knowledge vs. Execution
 
-Before running benchmarks, we surveyed models about their blackjack knowledge (see [model_thoughts/](https://github.com/jsnider3/BlackjackBench/tree/main/model_thoughts)). Most stated the right rules and core principles (split A/A and 8/8, never split 10/10, stand on hard 17+), with the greatest variation in doubles. Gemma is the only one with clear errors, as it suggests doubling down on soft 19-21.
+Before running benchmarks, we surveyed models about their blackjack knowledge (see [model_thoughts/](https://github.com/jsnider3/BlackjackBench/tree/main/model_thoughts)). Most stated the right rules and core principles (split A/A and 8/8, never split 10/10, stand on hard 17+), with the greatest variation in doubles. Gemma is the only one with clear errors in its stated strategy, as it suggests doubling down on soft 19–21.
 
 **Key finding: knowledge alone isn’t sufficient.** Even models with solid theoretical understanding failed dramatically without thinking enabled. This contrasts with skilled human players, who execute basic strategy automatically because they’ve memorized it.
 
@@ -293,7 +293,7 @@ This work opens several promising avenues for further investigation:
 
 [^1]: **Expected Value Methodology**: The +2.6% EV for Basic Strategy represents the empirical result from the specific 2,750 hands tested, not the theoretical house edge (~-0.5% under standard rules). This sample-specific baseline ensures fair comparison since all models play identical hands with identical random seeds. The positive EV indicates this particular sample was player-favorable, which is within normal variance for blackjack.
 
-[^2]: "Thinking" refers to Chain-of-Thought prompting where models generate intermediate reasoning steps before outputting their final decision. For OpenAI models, this uses the reasoning effort parameter; for Anthropic models, this enables the thinking budget; for Google models, this uses reasoning summaries. Non-thinking models respond directly without explicit step-by-step reasoning. Foundational work on CoT and test-time reasoning includes: Wei et al., 2022 ("Chain-of-Thought Prompting Elicits Reasoning"; arXiv:2201.11903), Kojima et al., 2022 ("Large Language Models are Zero-Shot Reasoners"; arXiv:2205.11916), and Wang et al., 2022 ("Self-Consistency Improves Chain of Thought Reasoning in Large Language Models"; arXiv:2203.11171).
+[^2]: “Thinking” denotes Chain‑of‑Thought style test‑time reasoning: models generate intermediate reasoning before outputting a single action token. See the LLM Integration section (“What is ‘thinking’?”) for the exact prompt and provider settings. Background on CoT: Wei et al., 2022 (Chain‑of‑Thought Prompting), Kojima et al., 2022 (Zero‑Shot Reasoners), Wang et al., 2022 (Self‑Consistency).
 
 [^3]: **Model specifications**: Exact model identifiers used: Claude Sonnet 4 (`claude-sonnet-4-20250514`), Claude Opus 4.1 (`claude-opus-4-1-20250805`), GPT‑5 (`gpt-5`), Gemini 2.5 Flash (`gemini-2.5-flash`), Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`), Gemini 2.5 Pro (`gemini-2.5-pro`). Sonoma Sky Alpha and Sonoma Dusk Alpha are stealth models hosted on OpenRouter that are strongly suspected to be Grok 4 variants. See, for example: https://manifold.markets/iwakura/who-is-behind-the-sonoma-cloaked-mo
 
