@@ -59,9 +59,7 @@ class BasicStrategyAgent:
                 return Action.DOUBLE
             return Action.HIT
         if total == 18:  # A,7
-            if up in (2, 7, 8):
-                return Action.STAND
-            if up in (3, 4, 5, 6) and can_double:
+            if up in (2, 3, 4, 5, 6) and can_double:
                 return Action.DOUBLE
             if up in (9, 10, 11):
                 return Action.HIT
